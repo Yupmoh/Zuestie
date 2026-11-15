@@ -1,0 +1,53 @@
+name: Bug report
+description: Something in Zuestie looks wrong or does not work.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: Thanks for testing Zuestie. The two command outputs below usually show the cause right away.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you saw, and what you expected instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: How to make it happen
+      description: Guide name, step number, and what you did. Example "Duskwood & Redridge Mountains, step 22, clicked the item button".
+    validations:
+      required: true
+  - type: textarea
+    id: status
+    attributes:
+      label: Output of /zu status
+      description: Type /zu status in chat and copy the lines here (or attach a screenshot of them).
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: lines
+    attributes:
+      label: Output of /zu lines
+      description: Only for tracker text problems (wrong, missing or stuck lines).
+      render: text
+  - type: textarea
+    id: screenshot
+    attributes:
+      label: Screenshot
+      description: Drag a screenshot of the tracker or map here.
+  - type: input
+    id: versions
+    attributes:
+      label: Versions
+      description: From WowUp, e.g. "Zuestie v0.2.0, Questie 12.9.0, Zygor 1.6".
+    validations:
+      required: true
+  - type: textarea
+    id: errors
+    attributes:
+      label: Lua errors
+      description: If BugSack or the game showed an error, paste it here.
+      render: text
