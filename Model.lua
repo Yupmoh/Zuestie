@@ -50,52 +50,6 @@ local function BindObjective(goal)
     goal.objnum = byName or (typeCount == 1 and byType) or nil
 end
 
--- Zygor for Forever reads skill levels only from GetProfessions, which leaves out skill lines such as
--- Lockpicking and Riding: their goals stay at 0 ("Reach Level 75 in Lockpicking (0/75)") and never complete.
--- For a skill Zygor does not know, Zuestie reads the skill line from C_SkillInfo instead.
-local SKILL_LINE_IDS = {Lockpicking = 633} -- skill lines missing from Zygor's own list
-local skillLines = {} -- [name] = skill table handed to Zygor, refreshed on every read
-
-local function TitleCase(first, rest)
-    return first:upper() .. rest:lower()
-end
-
-local function SkillLine(name)
-    name = name:gsub("_", " "):gsub("(%a)([%w]*)", TitleCase) -- as Zygor's GetSkill names skills
-    local id = SKILL_LINE_IDS[name] or ZGV.Professions.tradeskillsIdByName[name]
-    if not id then
-        return nil
-    end
-    local ok, info = pcall(C_SkillInfo.GetSkillLineInfoByID, id)
-    if not (ok and type(info) == "table" and type(info.rank) == "number" and info.rank > 0) then
-        return nil
-    end
-    local skill = skillLines[name]
-    if not skill then
-        skill = {active = true, skillID = id, name = name}
-        skillLines[name] = skill
-    end
-    skill.level, skill.max = info.rank, info.maxRank or info.rank
-    return skill
-end
-
-function Z.RepairSkills()
-    local professions = ZGV.Professions
-    if not (C_SkillInfo and type(C_SkillInfo.GetSkillLineInfoByID) == "function" and type(professions) == "table"
-        and type(professions.GetSkill) == "function" and type(professions.tradeskillsIdByName) == "table") then
-        return
-    end
-    local getSkill = professions.GetSkill
-    professions.GetSkill = function(self, name)
-        local skill = getSkill(self, name)
-        -- Zygor answers a skill it does not know with its shared placeholder (level 0).
-        if type(skill) == "table" and skill.placeholder and type(name) == "string" then
-            return SkillLine(name) or skill
-        end
-        return skill
-    end
-end
-
 local function AddGoal(m, step, goal, ctx)
     local profile = ZGV.db.profile
     BindObjective(goal)

@@ -161,6 +161,12 @@ LOCKPICKING = 14
 C_SkillInfo = {GetSkillLineInfoByID = function(id)
     if id == 633 then return {name = "Lockpicking", rank = LOCKPICKING, maxRank = 100, skillID = 633} end
 end}
+PARTY = {} -- party1, party2, ...: {name, surname}
+function GetNumGroupMembers() return #PARTY + 1 end
+function UnitNameUnmodified(unit)
+    local member = PARTY[tonumber(unit:match("%d+$"))]
+    if member then return member[1], member[2] end
+end
 
 -- Libraries --------------------------------------------------------------------------------
 local MESSAGES = {}
@@ -344,7 +350,15 @@ ZGV = {
     Professions = {tradeskillsIdByName = {Cooking = 185, Riding = 762},
         known = {Cooking = {level = 126, max = 150, skillID = 185, name = "Cooking"}},
         placeholder = {active = false, level = 0, max = 0, placeholder = true}},
+    IsForever = true,
+    IsSecret = function() return false end,
+    Sync = {
+        OnEvent = function() SYNC_EVENTS = (SYNC_EVENTS or 0) + 1 end,
+        IsPartyStatusComplete = function() return true end,
+        GetStepGoalPartyStatusText = function() return "[X]", "ff00ff00" end,
+    },
 }
+ZGV.Events_Events = {GROUP_ROSTER_UPDATE = {ZGV.Sync.OnEvent}}
 function ZGV.Professions:GetSkill(name) return self.known[name] or self.placeholder end
 function ZGV:SetGuide(title) LOADED = title end
 function ZGV:FocusStep() end
@@ -431,6 +445,16 @@ check(ZGV.Professions:GetSkill("Lockpicking").level == 14 and ZGV.Professions:Ge
 LOCKPICKING = 15
 check(ZGV.Professions:GetSkill("Lockpicking").level == 15, "Lockpicking follows skill-ups")
 check(ZGV.Professions:GetSkill("Cooking").level == 126, "keeps Zygor's own skill values")
+
+-- Zygor's party sync with a member the client has not loaded yet ("Unknown", no surname)
+PARTY = {{"Nyx", "Duskfang"}, {"Unknown", nil}}
+for _, handler in ipairs(ZGV.Events_Events.GROUP_ROSTER_UPDATE) do handler(ZGV, "GROUP_ROSTER_UPDATE") end
+check(SYNC_EVENTS == nil and ZGV.Sync:IsPartyStatusComplete() == false and ZGV.Sync:GetStepGoalPartyStatusText(1, 1) == nil,
+    "Zygor's party sync waits while a party member's name is not loaded")
+PARTY[2] = {"Trifling", "Fizzlebang"}
+RunTimers()
+check(SYNC_EVENTS == 1 and ZGV.Sync:IsPartyStatusComplete() == true, "Zygor's party sync runs once the name loads")
+PARTY = {}
 
 -- Quest list marks
 local q245, q777 = Find("Quest 245"), Find("Quest 777")

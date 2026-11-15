@@ -312,7 +312,7 @@ local function WaitForZygor()
         end
         local AceEvent = LibStub("AceEvent-3.0")
         AceEvent:Embed(Z)
-        Z.Try(Z.RepairSkills)
+        Z.Repairs.Install()
         for _, message in ipairs(ZYGOR_MESSAGES) do
             Z:RegisterMessage(message, OnZygorMessage)
         end
