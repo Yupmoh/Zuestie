@@ -29,9 +29,19 @@ WowUp updates Zuestie like any other addon when a new release comes out.
 - On a guide's last step, a "Next guide" line loads the next guide in Zygor's order.
 - Quests your guides use get a violet "!" in Questie's quest list too.
 
+## Catch-up
+
+Skipped a zone? When quests ahead in the guide need earlier quests you never did, a violet line under the step says so, for example "Earlier quests needed: 5, from Duskwood & Redridge Mountains (25-27)". Hover it to see the quests.
+
+Click it to catch up. Zygor loads the earlier guide at the first needed quest and skips every step that does not lead to those quests. The line counts down as you turn them in. When the last one is done, you jump back to the step you left.
+
+Zuestie uses Zygor's quest chains and fills the gaps with Questie's prerequisites. Quests for another race or class never count. Click the line again, or type `/zu catchup`, to stop: you go back to the step you left.
+
+While Zuestie is on, Zygor also skips accept steps whose earlier quests you have not done, so it stops sending you to quest givers who have nothing for you.
+
 ## Settings
 
-Esc, then Options, then AddOns, then Zuestie (or type `/zu config`). Switch the progress bar, tips, step-line buttons, item buttons, quest-list marks, map pins and violet "!" on or off, choose how many next guides count, and change Zygor's arrow style and size.
+Esc, then Options, then AddOns, then Zuestie (or type `/zu config`). Switch the progress bar, tips, step-line buttons, item buttons, quest-list marks, catch-up line, map pins and violet "!" on or off, choose how many next guides count, and change Zygor's arrow style and size.
 
 ## Commands
 
@@ -41,6 +51,7 @@ Esc, then Options, then AddOns, then Zuestie (or type `/zu config`). Switch the 
 | `/zu next`, `/zu back` | Skip or go back a step |
 | `/zu zygor` | Turn Zuestie off and get Zygor's own window back |
 | `/zu on` | Turn Zuestie on again |
+| `/zu catchup` | Start or stop catching up on earlier quests |
 | `/zu status` | Check that Zygor's engine is running |
 | `/zu config` | Open the settings |
 | `/zu lines` | Print the guide lines with their raw text, for bug reports |
