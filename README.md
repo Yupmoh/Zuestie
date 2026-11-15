@@ -2,7 +2,7 @@
 
 Zygor's leveling guides inside Questie's quest tracker, for WoW Forever.
 
-Zuestie runs Zygor's guide engine with its window hidden and shows the current step as a section at the top of Questie's tracker: step lines with icons, a progress bar, map pins, and a violet "!" on quests the guide will pick up. Zygor's arrow stays. Your Questie quest list stays as it is.
+Zuestie runs Zygor's guide engine with its window hidden and shows the current step as a section at the top of Questie's tracker: step lines with icons, a progress bar and map pins. On the map, a violet "!" marks quests your guide or the next three guides in Zygor's order pick up; yellow "!" are quests the guides skip. Zygor's arrow stays. Your Questie quest list stays as it is.
 
 Beta: expect rough edges.
 
@@ -34,6 +34,7 @@ WowUp updates Zuestie like any other addon when a new release comes out.
 | `/zu on` | Turn Zuestie on again |
 | `/zu status` | Check that Zygor's engine is running |
 | `/zu lines` | Print the guide lines with their raw text, for bug reports |
+| `/zu quests` | Show which of Questie's "!" belong to your guides and how many are violet |
 
 ## Bugs
 
