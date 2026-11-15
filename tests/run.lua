@@ -1,0 +1,517 @@
+-- Offline checks for Zuestie, with small stand-ins for WoW, Questie and Zygor.
+-- Run from the repository root: lua5.1 tests/run.lua (fails with an error if any check fails).
+-- These prove wiring and behavior of Zuestie's own code; the in-game look still needs a /reload.
+local ROOT = ROOT or ""
+local unpack = table.unpack or unpack
+
+local failures = 0
+local function check(ok, label)
+    if ok then
+        print("PASS " .. label)
+    else
+        failures = failures + 1
+        print("FAIL " .. label)
+    end
+end
+
+-- WoW frames ---------------------------------------------------------------------------------
+COMBAT = false
+COMBAT_VIOLATION = nil
+function InCombatLockdown() return COMBAT end
+
+local FRAMES = {}
+local Frame = {}
+Frame.__index = Frame
+
+local function Protected(self, what)
+    if COMBAT and self.template == "SecureActionButtonTemplate" then
+        COMBAT_VIOLATION = what
+    end
+end
+
+local function NewFrame(kind, name, parent, template)
+    local f = setmetatable({kind = kind, name = name, parent = parent, template = template, points = {}, shown = true,
+        alpha = 1, clamped = false, scripts = {}, hooks = {}, attributes = {}}, Frame)
+    if name then
+        _G[name] = f
+    end
+    FRAMES[#FRAMES + 1] = f
+    return f
+end
+
+function Frame:SetPoint(...) Protected(self, "SetPoint") self.points[#self.points + 1] = {...} end
+function Frame:ClearAllPoints() Protected(self, "ClearAllPoints") self.points = {} end
+function Frame:GetPoint(i) local p = self.points[i or 1] if p then return unpack(p) end end
+function Frame:SetClampedToScreen(v) self.clamped = v end
+function Frame:IsClampedToScreen() return self.clamped end
+function Frame:IsShown() return self.shown end
+function Frame:IsVisible() return self.shown end
+function Frame:Show() Protected(self, "Show") self.shown = true end
+function Frame:Hide()
+    Protected(self, "Hide")
+    local was = self.shown
+    self.shown = false
+    if was then
+        for _, hook in ipairs(self.hooks.OnHide or {}) do hook(self) end
+    end
+end
+function Frame:SetShown(v) if v then self:Show() else self:Hide() end end
+function Frame:GetAlpha() return self.alpha end
+function Frame:SetAlpha(a) self.alpha = a end
+function Frame:HookScript(event, fn) self.hooks[event] = self.hooks[event] or {} table.insert(self.hooks[event], fn) end
+function Frame:SetScript(event, fn) self.scripts[event] = fn end
+function Frame:GetScript(event) return self.scripts[event] end
+function Frame:RegisterEvent() end
+function Frame:GetParent() return self.parent end
+function Frame:SetParent(p) Protected(self, "SetParent") self.parent = p end
+function Frame:SetSize(w, h) self.w, self.h = w, h end
+function Frame:SetNormalTexture(t) self.normal = t end
+function Frame:SetPushedTexture() end
+function Frame:SetDisabledTexture() end
+function Frame:SetHighlightTexture() end
+function Frame:RegisterForClicks() end
+function Frame:CreateTexture() return NewFrame("Texture") end
+function Frame:CreateFontString() return NewFrame("FontString") end
+function Frame:SetAllPoints() end
+function Frame:SetTexture(t) self.texturePath = t end
+function Frame:SetText(t) self.text = t end
+function Frame:SetDesaturated(v) self.desaturated = v end
+function Frame:SetCooldown() end
+function Frame:SetAttribute(k, v) Protected(self, "SetAttribute") self.attributes[k] = v end
+function Frame:GetAttribute(k) return self.attributes[k] end
+
+function CreateFrame(kind, name, parent, template) return NewFrame(kind, name, parent, template) end
+UIParent = NewFrame("Frame", "UIParent")
+WorldMapFrame = NewFrame("Frame", "WorldMapFrame")
+
+GameTooltip = {lines = {}}
+function GameTooltip:SetOwner(owner) self.owner = owner self.lines = {} end
+function GameTooltip:AddLine(text) self.lines[#self.lines + 1] = text end
+function GameTooltip:SetItemByID(id) self.item = id end
+function GameTooltip:Show() self.shown = true end
+function GameTooltip:Hide() self.shown = false end
+function GameTooltip:GetOwner() return self.owner end
+
+local CHAT = {}
+DEFAULT_CHAT_FRAME = {AddMessage = function(_, msg) CHAT[#CHAT + 1] = msg end}
+function geterrorhandler() return function(err) print("LUA ERROR " .. tostring(err)) failures = failures + 1 end end
+function hooksecurefunc(t, key, fn)
+    local orig = t[key]
+    t[key] = function(...)
+        local results = {orig(...)}
+        fn(...)
+        return unpack(results)
+    end
+end
+function strlower(s) return string.lower(s) end
+function strtrim(s) return (s:gsub("^%s+", ""):gsub("%s+$", "")) end
+function strsplit(sep, s)
+    local parts = {}
+    for part in (s .. sep):gmatch("(.-)" .. sep:gsub("%p", "%%%0")) do parts[#parts + 1] = part end
+    return unpack(parts)
+end
+function wipe(t) for k in pairs(t) do t[k] = nil end return t end
+SlashCmdList = {}
+
+local timers, tickers = {}, {}
+C_Timer = {
+    After = function(_, fn) timers[#timers + 1] = fn end,
+    NewTicker = function(_, fn)
+        local ticker = {fn = fn}
+        function ticker:Cancel() self.cancelled = true end
+        tickers[#tickers + 1] = ticker
+        return ticker
+    end,
+}
+local function RunTimers()
+    for _ = 1, 50 do
+        if #timers == 0 then return end
+        local queue = timers
+        timers = {}
+        for _, fn in ipairs(queue) do fn() end
+    end
+end
+local function Tick()
+    for _, ticker in ipairs(tickers) do
+        if not ticker.cancelled then ticker.fn() end
+    end
+    RunTimers()
+end
+local function Fire(event, arg)
+    for _, f in ipairs(FRAMES) do
+        if f.scripts.OnEvent then f.scripts.OnEvent(f, event, arg) end
+    end
+end
+
+BAGS = {[1234] = 3}
+C_Item = {
+    GetItemInfoInstant = function(id) return id, "Quest", "Quest", "", 134400 end,
+    GetItemCount = function(id) return BAGS[id] or 0 end,
+}
+C_Container = {GetItemCooldown = function() return 0, 0, 1 end}
+OBJECTIVES = {[245] = {{"Pygmy Venom Web Spider slain: 7/15", "monster"}}}
+function GetQuestObjectiveInfo(questId, i)
+    local o = OBJECTIVES[questId] and OBJECTIVES[questId][i]
+    if o then return o[1], o[2], false, 0, 0 end
+end
+OPENED_CATEGORY = nil
+Settings = {OpenToCategory = function(id) OPENED_CATEGORY = id end}
+
+-- Libraries --------------------------------------------------------------------------------
+local MESSAGES = {}
+local OPTIONS
+local LAST_MENU
+local LIBS = {
+    ["AceEvent-3.0"] = {Embed = function(_, target)
+        target.RegisterMessage = function(_, message, fn) MESSAGES[message] = fn end
+    end},
+    ["LibUIDropDownMenuQuestie-4.0"] = {
+        Create_UIDropDownMenu = function() return {} end,
+        EasyMenu = function(_, list) LAST_MENU = list end,
+        CloseDropDownMenus = function() end,
+    },
+    ["AceConfigRegistry-3.0"] = {RegisterOptionsTable = function(_, _, options) OPTIONS = options end},
+    ["AceConfigDialog-3.0"] = {AddToBlizOptions = function() return {}, 77 end},
+}
+LibStub = setmetatable({GetLibrary = function(_, name) return LIBS[name] end}, {__call = function(_, name) return LIBS[name] end})
+
+-- Questie ----------------------------------------------------------------------------------
+local MODULES = {}
+QuestieLoader = {ImportModule = function(_, name) MODULES[name] = MODULES[name] or {} return MODULES[name] end}
+local function M(name) return QuestieLoader:ImportModule(name) end
+
+local DRAWN, UPDATES, ITEM_COLUMN = {}, 0, false
+local TRACKED = {245, 777}
+local function Line(label)
+    local line = NewFrame("Button")
+    line.label = label
+    line:SetScript("OnClick", "questieHandler")
+    DRAWN[#DRAWN + 1] = line
+    return line
+end
+M("LineBuilder").AddHeader = function(o) return Line("H:" .. o.text), false end
+M("LineBuilder").AddTitle = function(o) return Line("T:" .. o.text) end
+M("LineBuilder").AddObjective = function(o) return Line("O:" .. o.text) end
+M("LineBuilder").FinishEntry = function() end
+M("TrackerLayout").GetMargins = function()
+    local column = ITEM_COLUMN and 25 or 16 -- Questie's item column is wider while a line has an item
+    return {quest = 40 + column, objective = 53 + column, buttonSize = 16, itemButtonLeft = 38}
+end
+M("TrackerLayout").SetItemColumnShown = function(shown) ITEM_COLUMN = shown end
+M("QuestSection").Draw = function()
+    for _, id in ipairs(TRACKED) do
+        M("LineBuilder").AddTitle({text = "Quest " .. id, colored = true, clickMode = "quest", target = {Id = id}})
+    end
+end
+M("TrackerLinePool").ResetLinesForChange = function() end
+M("TrackerUtils").HasQuest = function() return false end
+M("TrackerQuestTooltip").Show = function() end
+M("TrackerQuestTooltip").Hide = function() end
+M("QuestieTracker").started = true
+M("QuestieTracker").Update = function()
+    if InCombatLockdown() then return end
+    UPDATES = UPDATES + 1
+    DRAWN = {}
+    ITEM_COLUMN = false
+    M("TrackerLinePool").ResetLinesForChange()
+    M("QuestSection").Draw()
+end
+
+local PINS = {}
+local QM = M("QuestieMap")
+QM.questIdFrames = {}
+local iconCount = 0
+function QM:DrawManualIcon(data) PINS[#PINS + 1] = data end
+function QM:ResetManualFrames() PINS = {} end
+function QM:DrawWorldIcon(data)
+    local frames = {}
+    for _, minimap in ipairs({false, true}) do
+        iconCount = iconCount + 1
+        local f = {name = "QuestieIcon" .. iconCount, data = data, miniMapIcon = minimap, texture = NewFrame("Texture")}
+        f.texture:SetTexture(Questie.usedIcons[data.Icon])
+        _G[f.name] = f
+        self.questIdFrames[data.Id] = self.questIdFrames[data.Id] or {}
+        self.questIdFrames[data.Id][f.name] = f.name
+        frames[#frames + 1] = f
+    end
+    return frames[1], frames[2]
+end
+function QM:GetFramesForQuest(id)
+    local found = {}
+    for name in pairs(self.questIdFrames[id] or {}) do found[name] = _G[name] end
+    return found
+end
+M("QuestieLib").GetQuestIcon = function(quest) return quest.icon end
+M("ZoneDB").GetAreaIdByUiMapId = function(_, map)
+    if map == 999 then error("No AreaId found for UiMapId: 999") end
+    return map + 10000
+end
+
+local questCallbacks = {}
+Questie = {
+    db = {profile = {trackerEnabled = true}},
+    ICON_TYPE_AVAILABLE = 6,
+    usedIcons = {[6] = "yellow", [13] = "green"},
+    icons = setmetatable({}, {__index = function(_, k) return "Questie\\" .. k end}),
+    API = {isReady = true, RegisterForQuestUpdates = function(cb) questCallbacks[#questCallbacks + 1] = cb end},
+}
+
+-- Zygor ------------------------------------------------------------------------------------
+local Goal = {}
+Goal.__index = Goal
+function Goal:GetStatus() return self.status end
+function Goal:GetText() return self.text end
+function Goal:IsInlineTravel() return self.travel or false end
+function Goal:CanBeIndentHidden() return false end
+function Goal:OnClick() CLICKED = self end
+function Goal:GetTooltip() end
+local function G(t) return setmetatable(t, Goal) end
+local Step = {}
+Step.__index = Step
+function Step:IsComplete() return false end
+local function S(goals) return setmetatable({goals = goals}, Step) end
+local Guide = {}
+Guide.__index = Guide
+function Guide:GetStatus() return self.status or "VALID" end
+local function NewGuide(title, fields)
+    local guide = setmetatable(fields or {}, Guide)
+    guide.title = title
+    guide.title_short = title:match("([^\\]+)$")
+    return guide
+end
+
+local KILL = G{action = "kill", status = "incomplete", text = "Kill 15 Pygmy Venom Web Spider", questid = 245,
+    target = "Pygmy Venom Web Spider", tooltip = "They roam the hills.", x = 0.3, y = 0.4, map = 1431}
+local USE = G{action = "use", status = "incomplete", text = "Use the Ectoplasmic Distiller", itemid = 1234, x = 0.2, y = 0.5, map = 1431}
+local STEP1 = S{
+    G{action = "accept", status = "complete", text = "Accept 'The Legend of Stalvan'", questid = 66, x = 0.75, y = 0.45, map = 1431},
+    KILL,
+    USE,
+    G{action = "goto", status = "incomplete", text = "Go to 10.2,49.7", travel = true, x = 0.102, y = 0.497, map = 1431},
+    G{action = "talk", status = "incomplete", text = "Talk inside the instance", x = 0.1, y = 0.1, map = 999},
+}
+local LAST = S{G{action = "", status = "passive", text = "This guide is now complete."}}
+local NEXT1 = NewGuide("LEVELING\\Wetlands (27-29)", {rawdata = "\nstep\naccept Fresh Meat##281 |goto Wetlands 10,50\n",
+    next = "Leveling Guides\\Ashenvale (29-30)"})
+local NEXT2 = NewGuide("LEVELING\\Ashenvale (29-30)", {rawdata = "\naccept The Tower of Althalaxx##1140\n"})
+local CURRENT = NewGuide("LEVELING\\Duskwood & Redridge Mountains (25-27)", {steps = {STEP1, LAST},
+    next = "Leveling Guides\\Wetlands (27-29)"})
+local GUIDES = {CURRENT, NEXT1, NEXT2}
+
+local master = NewFrame("Frame", "ZygorGuidesViewerFrameMaster", UIParent)
+local zframe = NewFrame("Frame", "ZygorGuidesViewerFrame", master)
+zframe.clamped = true
+zframe:SetPoint("TOPLEFT", master)
+
+local FOG = true
+ZGV = {
+    Frame = zframe,
+    initialized = true,
+    db = {profile = {tooltipsbelow = true, stickyon = false, enable_actionbar = true, mapicons = true, foglight = true,
+        showmapbutton = true, nc_enable = true, hideincombat = false, n_popup_guides = true, enable_viewer = true,
+        progress = true, progressbarmode = "steps", arrowshow = true, arrowskin = "Starlight", arrowscale = 1}},
+    registeredguides = GUIDES,
+    CurrentGuide = CURRENT,
+    CurrentStep = STEP1,
+    CurrentStepNum = 1,
+    questsbyid = {[245] = {inlog = true}},
+    GOALTYPES = {},
+    ProgressBar = {CurrentProgress = 34, Text = {tooltip = "Steps Completed: 1/2"}},
+    Pointer = {
+        ArrowSkins = {Starlight = {name = "Starlight"}, Stealth = {name = "Stealth"}},
+        ClearSet = function() end,
+        ShowMapMarkers = function() end,
+        SetArrowSkin = function(_, id) ZGV.db.profile.arrowskin = id end,
+        SetupArrow = function() ARROW_SETUP = (ARROW_SETUP or 0) + 1 end,
+        UpdateArrowVisibility = function() end,
+    },
+    ActionBar = {initialised = true, ClearBar = function() ACTIONBAR = "cleared" end,
+        SetActionButtons = function() ACTIONBAR = "set" end, ToggleFrame = function() end},
+    Foglight = {DataProvider = {name = "fog"}, ToggleOverlay = function() FOG = not FOG end},
+    IsDataProviderRegistered = function() return FOG end,
+    NotificationCenter = {UpdateButton = function() end},
+    Tabs = {Pool = {}, TryToActivateGuide = function() return false end},
+}
+function ZGV:SetGuide(title) LOADED = title end
+function ZGV:FocusStep() end
+function ZGV:SkipStep() end
+function ZGV:PreviousStep() end
+function ZGV:GetStickiesAt() return {} end
+function ZGV:SetVisible(_, on) self.Frame:SetShown(on) end
+function ZGV:FindSuggestedGuides() return {} end
+function ZGV:GetGuideByTitle(title)
+    local short = title:match("([^\\]+)$")
+    for _, guide in ipairs(GUIDES) do
+        if guide.title_short == short then return guide end
+    end
+end
+function ZGV:ReanchorFrame() self.Frame:ClearAllPoints() self.Frame:SetPoint("TOPLEFT", self.Frame:GetParent()) end
+function ZGV:ShowWaypoints() end
+function ZGV:UpdateMapButton() end
+
+-- Load Zuestie in TOC order ----------------------------------------------------------------
+-- Load Zuestie in TOC order. A runner without file access can pass ZUESTIE_FILES and ZUESTIE_SOURCES.
+local Z = {}
+local files = ZUESTIE_FILES
+if not files then
+    files = {}
+    for line in io.lines(ROOT .. "Zuestie.toc") do
+        if line:match("%.lua%s*$") then files[#files + 1] = line:match("^%s*(.-)%s*$") end
+    end
+end
+local compile = loadstring or load
+for _, name in ipairs(files) do
+    local chunk = ZUESTIE_SOURCES and assert(compile(ZUESTIE_SOURCES[name], "@" .. name)) or assert(loadfile(ROOT .. name))
+    chunk("Zuestie", Z)
+end
+
+local function Labels()
+    local labels = {}
+    for _, line in ipairs(DRAWN) do labels[#labels + 1] = line.label end
+    return table.concat(labels, "\n")
+end
+local function Find(pattern)
+    for _, line in ipairs(DRAWN) do
+        if line.label:find(pattern) then return line end
+    end
+end
+local VIOLET = "Interface\\AddOns\\Zuestie\\Icons\\available_guide.png"
+local function QuestIcon(id, icon)
+    return (QM:DrawWorldIcon({Id = id, Icon = icon, Type = "available", QuestData = {icon = icon}}))
+end
+
+-- Questie draws some quest starters before Zuestie turns on.
+local ICON66, ICON281, ICON500, ICON20 = QuestIcon(66, 6), QuestIcon(281, 6), QuestIcon(500, 6), QuestIcon(20, 13)
+
+Fire("ADDON_LOADED", "Zuestie")
+Fire("PLAYER_LOGIN")
+Tick()
+
+-- Startup ----------------------------------------------------------------------------------
+check(Z.active == true, "turns on after login")
+local point, relativeTo = zframe:GetPoint(1)
+check(point == "TOPRIGHT" and relativeTo == UIParent and not zframe.clamped, "parks Zygor's window off-screen")
+check(zframe.shown and zframe.alpha >= 0.1, "keeps Zygor's window shown so its step checker runs")
+local p = ZGV.db.profile
+check(p.enable_actionbar == false and p.mapicons == false and p.foglight == false and p.n_popup_guides == false,
+    "switches off Zygor's own UI while on")
+check(ACTIONBAR == "cleared" and FOG == false, "clears Zygor's item bar and map overlay")
+
+-- Tracker ----------------------------------------------------------------------------------
+check(DRAWN[1].label == "H:Duskwood & Redridge Mountains", "guide header first, without the level range")
+check(DRAWN[2].label:find("%(25%-27%) Step 1/2") ~= nil, "step line shows levels and step count")
+check(Find("WHITE8X8") ~= nil, "progress bar line")
+check(Find("They roam the hills") ~= nil, "tip line")
+check(not Labels():find("Go to 10.2"), "inline travel hidden like Zygor")
+check(DRAWN[#DRAWN].label:find("T:.*Quest 777") ~= nil, "Questie's quest list still drawn below the guide")
+check(UPDATES == 1, "one Questie layout on startup")
+Tick()
+check(UPDATES == 1, "no layout when nothing changed")
+
+check(KILL.objnum == 1, "links a kill line without an objective to the quest's objective")
+
+-- Quest list marks
+local q245, q777 = Find("Quest 245"), Find("Quest 777")
+check(q245 and q245.label:find(VIOLET, 1, true) ~= nil, "guide quest marked violet in the quest list")
+check(q777 and not q777.label:find(VIOLET, 1, true), "other quest not marked")
+
+-- Item button
+local item = _G.ZuestieItemButton1
+local useLine = Find("Use the Ectoplasmic Distiller")
+check(item and item.shown and item.attributes.item1 == "item:1234", "use step gets a secure item button")
+check(item and item.parent == useLine and ITEM_COLUMN == true, "item button sits in Questie's item column on its line")
+check(item and item.count.text == 3 and not item.icon.desaturated, "item button shows the bag count")
+
+-- Progress change: exactly one layout
+ZGV.ProgressBar.CurrentProgress = 41
+MESSAGES.ZGV_GOAL_PROGRESS("ZGV_GOAL_PROGRESS")
+RunTimers()
+check(UPDATES == 2, "one layout after progress changes")
+
+-- Combat
+COMBAT = true
+KILL.text = "Kill 7 Pygmy Venom Web Spider (8/15)"
+BAGS[1234] = 0
+Fire("BAG_UPDATE_DELAYED")
+Tick()
+check(UPDATES == 2, "no layout during combat")
+check(item.icon.desaturated == true, "item button grays out in combat when the item runs out")
+check(COMBAT_VIOLATION == nil, "no protected button changes during combat")
+COMBAT = false
+Fire("PLAYER_REGEN_ENABLED")
+RunTimers()
+check(UPDATES == 3 and Find("8/15") ~= nil, "lays out after combat ends")
+
+-- Clicks
+Find("Kill 7").scripts.OnClick(Find("Kill 7"), "LeftButton")
+check(CLICKED == KILL, "clicking a line forwards to Zygor")
+local killLine = Find("Kill 7")
+M("QuestieTracker"):Update()
+check(killLine.zuestie == nil and killLine.scripts.OnClick == "questieHandler", "pooled line handed back to Questie")
+
+-- Map colors
+check(ICON66.texture.texturePath == VIOLET, "guide quest from an earlier step is violet")
+check(ICON281.texture.texturePath == VIOLET, "next guide's quest is violet")
+check(ICON500.texture.texturePath == "yellow", "quest outside the guides stays yellow")
+check(ICON20.texture.texturePath == "green", "event quest keeps Questie's color")
+local laterIcon = QuestIcon(1140, 6)
+check(laterIcon.texture.texturePath == VIOLET, "quest drawn later gets violet as Questie draws it")
+check(#PINS > 0, "step pins drawn on the map")
+
+-- Settings page
+check(OPTIONS ~= nil, "settings page registered")
+SlashCmdList.ZUESTIE("config")
+check(OPENED_CATEGORY == 77, "/zu config opens the settings page")
+local args = OPTIONS.args
+args.tracker.args.showTips.set({"showTips"}, false)
+check(not Labels():find("They roam the hills"), "tips setting off hides tip lines")
+args.tracker.args.showTips.set({"showTips"}, true)
+args.map.args.violetQuests.set({"violetQuests"}, false)
+check(ICON66.texture.texturePath == "yellow", "violet setting off restores yellow")
+args.map.args.violetQuests.set({"violetQuests"}, true)
+check(ICON66.texture.texturePath == VIOLET, "violet setting on again")
+args.map.args.nextGuides.set({"nextGuides"}, 0)
+check(ICON281.texture.texturePath == "yellow", "next guides set to 0 drops their quests")
+args.map.args.nextGuides.set({"nextGuides"}, 3)
+args.tracker.args.itemButtons.set({"itemButtons"}, false)
+check(not item.shown, "item button setting off removes the button")
+args.tracker.args.itemButtons.set({"itemButtons"}, true)
+args.arrow.args.arrowskin.set(nil, "Stealth")
+check(p.arrowskin == "Stealth", "arrow style changes Zygor's arrow")
+args.arrow.args.arrowscale.set(nil, 1.25)
+check(p.arrowscale == 1.25 and ARROW_SETUP == 1, "arrow size changes Zygor's arrow")
+COMBAT = true
+args.arrow.args.arrowskin.set(nil, "Starlight")
+COMBAT = false
+check(p.arrowskin == "Stealth", "arrow is not rebuilt during combat")
+
+-- End of guide
+ZGV.CurrentStep, ZGV.CurrentStepNum = LAST, 2
+MESSAGES.ZGV_STEP_CHANGED("ZGV_STEP_CHANGED")
+RunTimers()
+local nextLine = Find("Next guide: Wetlands %(27%-29%)")
+check(nextLine ~= nil, "last step shows a next-guide line")
+check(not item.shown and item.parent == UIParent, "item button leaves with its step")
+nextLine.scripts.OnClick(nextLine, "LeftButton")
+check(LOADED == NEXT1.title, "clicking the next-guide line loads it")
+
+-- Back to Zygor and logout
+SlashCmdList.ZUESTIE("zygor")
+check(Z.active == false, "/zu zygor turns Zuestie off")
+check(p.enable_actionbar == true and p.mapicons == true and p.foglight == true and p.n_popup_guides == true,
+    "restores Zygor's settings")
+point, relativeTo = zframe:GetPoint(1)
+check(point == "TOPLEFT" and relativeTo == master and zframe.clamped, "puts Zygor's window back")
+check(#PINS == 0, "removes the step pins")
+check(not Labels():find("Duskwood"), "Questie's tracker back to stock")
+check(ICON66.texture.texturePath == "yellow", "quest colors back to Questie's")
+SlashCmdList.ZUESTIE("on")
+check(p.mapicons == false, "/zu on turns it on again")
+Fire("PLAYER_LOGOUT")
+check(p.mapicons == true and p.enable_actionbar == true, "logout saves Zygor's own settings")
+
+check(Z.lastError == nil, "no caught errors (" .. tostring(Z.lastError) .. ")")
+if failures > 0 then
+    error(failures .. " check(s) failed", 0)
+end
+print("All checks passed.")
