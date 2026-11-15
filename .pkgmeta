@@ -1,0 +1,7 @@
+package-as: Zuestie
+
+enable-nolib-creation: no
+
+ignore:
+  - .github
+  - README.md

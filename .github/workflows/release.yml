@@ -1,0 +1,24 @@
+# Pushing a version tag (v0.1.0, v0.2.0-beta1, ...) builds the addon zip and publishes a GitHub release.
+# The BigWigs packager reads Interface 16001 from the TOC, names the flavor "forever" in release.json,
+# and attaches both to the release; WowUp installs and updates from those two files.
+name: Package and release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    env:
+      GITHUB_OAUTH: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: BigWigsMods/packager@v2
