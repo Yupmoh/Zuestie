@@ -34,6 +34,7 @@ local function LoadGuide(guide)
     end
     ZGV:SetGuide(guide.title, 1)
 end
+M.LoadGuide = LoadGuide
 
 local function GuideEntry(guide, text)
     return {
@@ -171,6 +172,7 @@ function M.Open()
         list[#list + 1] = {text = "Search guides (Zygor browser)", notCheckable = true, func = function() Close() ZGV.GuideMenu:Show() end}
     end
     list[#list + 1] = {text = "Use Zygor's window instead", notCheckable = true, func = function() Close() Z.SetEnabled(false) end}
+    list[#list + 1] = {text = "Settings", notCheckable = true, func = function() Close() Z.Options.Open() end}
     list[#list + 1] = {text = "Close", notCheckable = true, func = Close}
 
     LibDropDown:EasyMenu(list, menuFrame, "cursor", 0, 0, "MENU")

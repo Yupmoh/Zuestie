@@ -20,17 +20,19 @@ local Strip = Z.Strip
 -- Zygor's quest-name pink becomes Questie's quest-title gold; other name colors stay.
 local ZYGOR_QUEST_COLOR = "|c[fF][fF][eE][eE][bB][bB][fF][fF]"
 local QUEST_COLOR = "|cFFFFD100"
+local GUIDE_COLOR = "|cFFB98CFF" -- the violet of the guide's "!"
 
 -- Goal lines start with an icon column, like the icons in front of Questie's quest titles.
 -- Same pictures as Questie's map icons; the accept "!" is the guide's violet one.
 local function Icon(path)
     return "|T" .. path .. ":0|t "
 end
+local GUIDE_ICON = Icon(Z.ICON_PATH .. "available_guide.png")
 local BLANK = Icon(Z.ICON_PATH .. "blank.png") -- keeps text aligned on lines without an icon
 local CHECK = Icon("Interface\\RaidFrame\\ReadyCheck-Ready")
 local CROSS = Icon("Interface\\RaidFrame\\ReadyCheck-NotReady")
 local ACTION_ICONS = {
-    accept = Icon(Z.ICON_PATH .. "available_guide.png"),
+    accept = GUIDE_ICON,
     turnin = Icon(Questie.icons.complete),
     talk = Icon(Questie.icons.talk),
     kill = Icon(Questie.icons.slay),
@@ -69,6 +71,8 @@ local function Format(line)
         return "|cFFC0C0C0" .. line.text .. ":|r"
     elseif line.kind == "progress" then
         return ProgressText(line)
+    elseif line.kind == "nextguide" then
+        return GUIDE_ICON .. GUIDE_COLOR .. line.text .. "|r"
     elseif line.kind == "tip" then
         -- Several |tip lines arrive joined by line breaks; one line keeps the section short.
         local tip = Strip(line.text):gsub("|n", "  "):gsub("\n", "  ")
@@ -98,6 +102,10 @@ local function OnLineClick(self, button)
         Z.CycleProgressMode()
         return
     end
+    if data.kind == "nextguide" and button ~= "RightButton" then
+        Z.Menu.LoadGuide(data.guide)
+        return
+    end
     if data.kind == "title" and not ZGV.CurrentGuide then
         Z.Menu.OpenGuides()
         return
@@ -118,6 +126,16 @@ local function Tag(line, data)
     line:SetScript("OnClick", OnLineClick)
 end
 
+local function ButtonTooltip(self)
+    GameTooltip:SetOwner(self, "ANCHOR_LEFT")
+    GameTooltip:AddLine(self.tip, 1, 0.82, 0)
+    GameTooltip:Show()
+end
+
+local function HideTooltip()
+    GameTooltip:Hide()
+end
+
 -- Back, choose-guide and next buttons in the empty space left of the step line, where Questie
 -- puts the buttons in front of quest titles. Three frames made once, moved onto each layout's step line.
 local SLOT_GAP = 2
@@ -128,16 +146,6 @@ local BUTTONS = {
 }
 local SHOW_ORDER = {"guides", "next", "prev"} -- which buttons stay when the space is narrow
 local buttons = {}
-
-local function ButtonTooltip(self)
-    GameTooltip:SetOwner(self, "ANCHOR_LEFT")
-    GameTooltip:AddLine(self.tip, 1, 0.82, 0)
-    GameTooltip:Show()
-end
-
-local function HideTooltip()
-    GameTooltip:Hide()
-end
 
 local function GetButton(spec)
     local button = buttons[spec.key]
@@ -193,6 +201,97 @@ local function PlaceButtons(line, hasGuide)
     end
 end
 
+-- Item buttons for "use" steps, in Questie's quest-item column. They are secure action buttons:
+-- made, attached and hidden only during Questie's layouts, which never run in combat. Clicking works
+-- in combat; count, cooldown and gray-out update from bag events.
+local MAX_ITEM_BUTTONS = 4
+local itemButtons = {}
+local usedItemButtons = 0
+
+local function ItemTooltip(self)
+    GameTooltip:SetOwner(self, "ANCHOR_LEFT")
+    GameTooltip:SetItemByID(self.itemid)
+    GameTooltip:Show()
+end
+
+local function ItemCount(itemid)
+    local getCount = C_Item and C_Item.GetItemCount or GetItemCount
+    return getCount(itemid, false, true) or 0
+end
+
+local function UpdateItemButton(button)
+    local count = ItemCount(button.itemid)
+    button.count:SetText(count > 1 and count or "")
+    button.icon:SetDesaturated(count == 0)
+    local getCooldown = C_Container and C_Container.GetItemCooldown or GetItemCooldown
+    local start, duration, enable = getCooldown(button.itemid)
+    if start and duration and duration > 0 and enable ~= 0 and enable ~= false then
+        button.cooldown:SetCooldown(start, duration)
+        button.cooldown:Show()
+    else
+        button.cooldown:Hide()
+    end
+end
+
+local function GetItemButton(i)
+    local button = itemButtons[i]
+    if not button then
+        button = CreateFrame("Button", "ZuestieItemButton" .. i, UIParent, "SecureActionButtonTemplate")
+        button:RegisterForClicks("AnyUp", "AnyDown")
+        button.icon = button:CreateTexture(nil, "ARTWORK")
+        button.icon:SetAllPoints()
+        button.count = button:CreateFontString(nil, "OVERLAY", "NumberFontNormalSmall")
+        button.count:SetPoint("BOTTOMRIGHT", -1, 1)
+        button.cooldown = CreateFrame("Cooldown", nil, button, "CooldownFrameTemplate")
+        button.cooldown:SetAllPoints()
+        button:SetHighlightTexture("Interface\\Buttons\\ButtonHilight-Square", "ADD")
+        button:SetScript("OnEnter", ItemTooltip)
+        button:SetScript("OnLeave", HideTooltip)
+        button:Hide()
+        itemButtons[i] = button
+    end
+    return button
+end
+
+local function PlaceItemButton(line, itemid)
+    if usedItemButtons >= MAX_ITEM_BUTTONS or InCombatLockdown() then
+        return
+    end
+    usedItemButtons = usedItemButtons + 1
+    local button = GetItemButton(usedItemButtons)
+    button.itemid = itemid
+    button:SetAttribute("type1", "item")
+    button:SetAttribute("item1", "item:" .. itemid)
+    local _, _, _, _, icon = C_Item.GetItemInfoInstant(itemid)
+    button.icon:SetTexture(icon or "Interface\\Icons\\INV_Misc_QuestionMark")
+    UpdateItemButton(button)
+
+    local margins = TrackerLayout.GetMargins()
+    local size = margins.quest - SLOT_GAP - margins.itemButtonLeft
+    button:SetSize(size, size)
+    button:ClearAllPoints()
+    button:SetPoint("TOPLEFT", line, "TOPLEFT", margins.itemButtonLeft, 1)
+    button:SetParent(line)
+    button:Show()
+end
+
+local function HideItemButtons()
+    for i = 1, usedItemButtons do
+        local button = itemButtons[i]
+        button:Hide()
+        button:ClearAllPoints()
+        button:SetParent(UIParent)
+        button:SetAttribute("item1", nil)
+    end
+    usedItemButtons = 0
+end
+
+function T.UpdateItemButtons()
+    for i = 1, usedItemButtons do
+        Z.Try(UpdateItemButton, itemButtons[i])
+    end
+end
+
 local function DrawGuide()
     local m = Z.BuildModel()
     -- What the tracker shows now; Z.Refresh asks for a new layout only when this goes stale.
@@ -203,6 +302,16 @@ local function DrawGuide()
         return
     end
 
+    -- Item buttons need Questie's wide quest-item column, as when a tracked quest has an item.
+    for _, data in ipairs(m.lines) do
+        if data.itemid then
+            if TrackerLayout.SetItemColumnShown then
+                TrackerLayout.SetItemColumnShown(true)
+            end
+            break
+        end
+    end
+
     -- One shared target: hovering any line highlights the whole guide section.
     local target = {zuestie = true}
     local line = LineBuilder.AddTitle({text = "|cFFFFD100" .. m.title .. "|r", colored = true, clickMode = "recipe", target = target})
@@ -210,7 +319,9 @@ local function DrawGuide()
         return
     end
     Tag(line, {kind = "title", text = m.title})
-    Z.Try(PlaceButtons, line, m.guide ~= nil)
+    if Z.Setting("showButtons") then
+        Z.Try(PlaceButtons, line, m.guide ~= nil)
+    end
 
     local last = line
     for _, data in ipairs(m.lines) do
@@ -219,6 +330,9 @@ local function DrawGuide()
             break
         end
         Tag(line, data)
+        if data.itemid then
+            Z.Try(PlaceItemButton, line, data.itemid)
+        end
         last = line
     end
     LineBuilder.FinishEntry(last)
@@ -238,6 +352,9 @@ local function ShowTooltip(line)
             tip:AddLine(data.tooltip, 1, 1, 1)
         end
         tip:AddLine("Click: switch between quests, steps and XP", 0.6, 0.6, 0.6)
+    elseif data.kind == "nextguide" then
+        tip:AddLine(data.guide.title_short or data.guide.title, 1, 0.82, 0)
+        tip:AddLine("Click: load this guide", 0.6, 0.6, 0.6)
     elseif data.goal then
         local goal = data.goal
         tip:AddLine(Strip(data.text), 1, 1, 1, true)
@@ -287,6 +404,17 @@ function T.Install()
         return drawQuests(...)
     end
 
+    -- Quest titles in Questie's list get the violet "!" when the guide uses the quest.
+    -- QuestSection builds a fresh options table per title, so prefixing its text is safe.
+    local addTitle = LineBuilder.AddTitle
+    LineBuilder.AddTitle = function(options, ...)
+        if Z.active and options and options.clickMode == "quest" and options.target
+            and Z.Setting("questListMarks") and Z.Pins.IsGuideQuest(options.target.Id) then
+            options.text = GUIDE_ICON .. options.text
+        end
+        return addTitle(options, ...)
+    end
+
     -- Questie hides its tracker when no quest is tracked; the guide section keeps it up.
     local hasQuest = TrackerUtils.HasQuest
     TrackerUtils.HasQuest = function(...)
@@ -307,6 +435,7 @@ function T.Install()
         end
         wipe(tagged)
         HideButtons()
+        HideItemButtons()
     end)
 
     -- Questie's quest tooltip ignores lines without a quest; show the guide tooltip on those.

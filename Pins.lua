@@ -11,10 +11,10 @@ local PIN_TYPE = "Zuestie" -- QuestieMap.manualFrames bucket, kept apart from Qu
 local GUIDE_QUEST_ICON = Z.ICON_PATH .. "available_guide.png"
 
 local QuestieMap, QuestieLib
-local guideQuests = {} -- [questId] = true
+local guideQuests = {} -- [questId] = true: violet on the map
+local listQuests = {} -- [questId] = true: marked in Questie's quest list (any quest the guides use)
 local guideKey -- title of the guide the set was built for
 local chainNames = {} -- short titles of the next guides whose quests are in the set
-local NEXT_GUIDES = 3 -- after Duskwood & Redridge: Wetlands, Ashenvale, Duskwood & Stranglethorn Vale
 
 -- Step pin pictures; the accept "!" is the guide's violet one, like the tracker line and the
 -- recolored Questie quest starters (a quest that unlocks later in the step has only this pin).
@@ -48,6 +48,9 @@ function P.Draw(pins)
     end
     local ZoneDB = QuestieLoader:ImportModule("ZoneDB")
     P.Clear()
+    if not Z.Setting("mapPins") then
+        return true
+    end
 
     local step = ZGV.CurrentStepNum or 0
     for i, pin in ipairs(pins) do
@@ -120,10 +123,11 @@ local function NextGuide(guide)
     return type(title) == "string" and ZGV:GetGuideByTitle(title) or nil
 end
 
--- Every quest the loaded guide accepts at any step (skipped ones stay marked), plus the quests of
--- the next NEXT_GUIDES guides in Zygor's chain, so upcoming quests stand out from ones the guides skip.
+-- Violet set: every quest the loaded guide accepts at any step (skipped ones stay marked), plus the
+-- accepts of the next guides in Zygor's chain (setting nextGuides), so upcoming quests stand out from
+-- ones the guides skip. Quest-list set: the violet quests plus every quest the loaded guide uses.
 -- Rebuilt only when the guide changes; recolors only the quests that entered or left the set.
--- force recolors the whole set, e.g. after a level-up retextured Questie's icons.
+-- force rebuilds and recolors everything, e.g. after a setting change or a level-up retexture.
 function P.UpdateGuideQuests(force)
     local guide = Z.active and ZGV.CurrentGuide
     local key = guide and guide.steps and guide.title or ""
@@ -133,22 +137,26 @@ function P.UpdateGuideQuests(force)
     guideKey = key
 
     local new = {}
+    local list = {}
     chainNames = {}
     if key ~= "" then
         for _, step in ipairs(guide.steps) do
             local goals = step.goals
             if goals then
                 for _, goal in ipairs(goals) do
-                    local questId = goal.action == "accept" and tonumber(goal.questid)
+                    local questId = tonumber(goal.questid)
                     if questId then
-                        new[questId] = true
+                        list[questId] = true
+                        if goal.action == "accept" then
+                            new[questId] = true
+                        end
                     end
                 end
             end
         end
         local seen = {[guide] = true}
         local nextGuide = guide
-        for _ = 1, NEXT_GUIDES do
+        for _ = 1, Z.Setting("nextGuides") do
             nextGuide = NextGuide(nextGuide)
             if not nextGuide or seen[nextGuide] then
                 break
@@ -157,6 +165,13 @@ function P.UpdateGuideQuests(force)
             chainNames[#chainNames + 1] = nextGuide.title_short or nextGuide.title
             AddRawAccepts(nextGuide, new)
         end
+    end
+    for questId in pairs(new) do
+        list[questId] = true
+    end
+    listQuests = list
+    if not Z.Setting("violetQuests") then
+        new = {}
     end
     for questId in pairs(guideQuests) do
         if not new[questId] then
@@ -169,6 +184,10 @@ function P.UpdateGuideQuests(force)
         end
     end
     guideQuests = new
+end
+
+function P.IsGuideQuest(questId)
+    return questId ~= nil and listQuests[questId] == true
 end
 
 -- /zu quests: which quest starters Questie has drawn, which belong to the guides, which are violet.

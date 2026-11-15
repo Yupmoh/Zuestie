@@ -15,6 +15,9 @@ end
 -- quest's only objective of that kind. Zygor then counts and completes the goal itself.
 local OBJECTIVE_TYPE = {kill = "monster", get = "item", goal = false}
 
+-- Goal actions that use an item; their lines get a clickable item button.
+local USE_ACTIONS = {use = true, useany = true}
+
 local function BindObjective(goal)
     local wanted = OBJECTIVE_TYPE[goal.action]
     if goal.objnum or not goal.questid or wanted == nil or goal.zuestieBound then
@@ -82,13 +85,16 @@ local function AddGoal(m, step, goal, ctx)
             tinsert(m.lines, {kind = "also", text = "Also"})
         end
         local line = {kind = "goal", goal = goal, status = status, text = text, indent = indent}
+        if USE_ACTIONS[goal.action] and status ~= "complete" and Z.Setting("itemButtons") then
+            line.itemid = tonumber(goal.itemid or goal.defaultitem)
+        end
         tinsert(m.lines, line)
         local pin = m.pins[#m.pins]
         if pin and pin.goal == goal then
             pin.text = text
         end
     end
-    if HasText(goal.tooltip) and (text == "?" or profile.tooltipsbelow) then
+    if HasText(goal.tooltip) and (text == "?" or profile.tooltipsbelow) and Z.Setting("showTips") then
         tinsert(m.lines, {kind = "tip", goal = goal, text = goal.tooltip, indent = indent + 1})
     end
 end
@@ -115,7 +121,8 @@ end
 -- XP changes; its window is parked, not gone. Zuestie reads the stored values instead of recounting.
 local function AddProgress(m)
     local bar = ZGV.ProgressBar
-    if ZGV.db.profile.progress == false or type(bar) ~= "table" or type(bar.CurrentProgress) ~= "number" then
+    if not Z.Setting("showProgress") or ZGV.db.profile.progress == false
+        or type(bar) ~= "table" or type(bar.CurrentProgress) ~= "number" then
         return
     end
     local percent = math.max(0, math.min(100, math.floor(bar.CurrentProgress + 0.5)))
@@ -133,6 +140,29 @@ local function AddProgress(m)
         r = r, g = g, b = b,
         tooltip = bar.Text and bar.Text.tooltip,
     })
+end
+
+-- Replaces Zygor's next-guide popups: a line that loads the next guide in Zygor's order. Shown on
+-- the guide's last step, or earlier once Zygor suggests the next guide (the player outleveled this one).
+local function AddNextGuide(m, guide)
+    local title = guide.next or (guide.headerdata and guide.headerdata.next)
+    local nextGuide = type(title) == "string" and ZGV:GetGuideByTitle(title)
+    if not nextGuide then
+        return
+    end
+    local onLastStep = (ZGV.CurrentStepNum or 0) >= #guide.steps
+    local suggested = false
+    if not onLastStep then
+        local ok, status = pcall(nextGuide.GetStatus, nextGuide)
+        suggested = ok and status == "SUGGESTED"
+    end
+    if onLastStep or suggested then
+        tinsert(m.lines, {
+            kind = "nextguide",
+            text = (onLastStep and "Next guide: " or "Ready for: ") .. (nextGuide.title_short or nextGuide.title),
+            guide = nextGuide,
+        })
+    end
 end
 
 function Z.BuildModel()
@@ -168,13 +198,14 @@ function Z.BuildModel()
             end
         end
     end
+    Z.Try(AddNextGuide, m, guide)
     return m
 end
 
 function Z.Signature(m)
     local parts = {m.guideName, m.title}
     for _, line in ipairs(m.lines) do
-        parts[#parts + 1] = line.kind .. ":" .. (line.status or "") .. ":" .. line.text
+        parts[#parts + 1] = line.kind .. ":" .. (line.status or "") .. ":" .. (line.itemid or "") .. ":" .. line.text
     end
     return concat(parts, "\001")
 end

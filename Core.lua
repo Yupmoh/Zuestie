@@ -29,6 +29,36 @@ function Z.Strip(text)
     return (text:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", ""))
 end
 
+-- Account-wide settings (ZuestieDB.settings), shown on the Options.lua settings page.
+Z.DEFAULTS = {
+    showProgress = true, -- progress bar under the step line
+    showTips = true, -- Zygor's tips as gray lines (always in the line tooltip)
+    showButtons = true, -- book, back and skip buttons on the step line
+    itemButtons = true, -- clickable item on "use" steps
+    questListMarks = true, -- violet mark on guide quests in Questie's quest list
+    mapPins = true, -- the step's waypoints on the map and minimap
+    violetQuests = true, -- violet "!" for quests the guides pick up
+    nextGuides = 3, -- next guides in Zygor's order whose quests count as guide quests
+}
+
+function Z.Setting(key)
+    local value = ZuestieDB and ZuestieDB.settings and ZuestieDB.settings[key]
+    if value == nil then
+        return Z.DEFAULTS[key]
+    end
+    return value
+end
+
+function Z.SetSetting(key, value)
+    ZuestieDB.settings[key] = value
+    if not Z.active then
+        return
+    end
+    Z.lastSig, Z.lastPinSig = nil, nil
+    Z.Pins.UpdateGuideQuests(true)
+    Z.Refresh() -- the cleared signature makes Questie lay out again, also for button and quest-list settings
+end
+
 local function Need(missing, ok, name)
     if not ok then
         missing[#missing + 1] = name
@@ -143,6 +173,8 @@ function Z.Refresh()
         return
     end
     Z.Headless.KeepAlive()
+    -- First: Questie's quest titles read the guide quest set while the tracker lays out.
+    Z.Pins.UpdateGuideQuests()
     local ok, m = Z.Try(Z.BuildModel)
     if not ok then
         return
@@ -154,7 +186,6 @@ function Z.Refresh()
     if pinSig ~= Z.lastPinSig and Z.Pins.Draw(m.pins) then
         Z.lastPinSig = pinSig
     end
-    Z.Pins.UpdateGuideQuests()
 end
 
 function Z.RefreshSoon()
@@ -297,12 +328,15 @@ events:RegisterEvent("PLAYER_LEVEL_UP")
 events:RegisterEvent("ZONE_CHANGED_NEW_AREA")
 -- Zygor recomputes its XP progress on this; the guide's progress line follows.
 events:RegisterEvent("PLAYER_XP_UPDATE")
+-- Cooldown swirl on the guide's item buttons.
+events:RegisterEvent("BAG_UPDATE_COOLDOWN")
 events:SetScript("OnEvent", function(_, event, arg1)
     if event == "ADDON_LOADED" and arg1 == "Zuestie" then
         ZuestieDB = ZuestieDB or {}
         if ZuestieDB.enabled == nil then
             ZuestieDB.enabled = true
         end
+        ZuestieDB.settings = ZuestieDB.settings or {}
         local missing = MissingQuestie()
         if #missing > 0 then
             Z.missing = missing
@@ -311,6 +345,7 @@ events:SetScript("OnEvent", function(_, event, arg1)
             Z.Pins.Install()
         end
     elseif event == "PLAYER_LOGIN" then
+        Z.Options.Register()
         if Z.missing then
             ReportMissing(Z.missing)
         else
@@ -336,6 +371,11 @@ events:SetScript("OnEvent", function(_, event, arg1)
                 Z.Pins.UpdateGuideQuests(true)
             end
         end)
+    elseif event == "BAG_UPDATE_COOLDOWN" then
+        Z.Tracker.UpdateItemButtons()
+    elseif event == "BAG_UPDATE_DELAYED" then
+        Z.Tracker.UpdateItemButtons()
+        Z.RefreshSoon()
     elseif event ~= "ADDON_LOADED" then
         Z.RefreshSoon()
     end
@@ -359,9 +399,11 @@ SlashCmdList.ZUESTIE = function(msg)
         Z.PrintLines()
     elseif msg == "quests" then
         Z.Pins.Report()
+    elseif msg == "config" or msg == "settings" or msg == "options" then
+        Z.Options.Open()
     elseif Z.active then
         Z.Menu.Open()
     else
-        Z.Print("off. Commands: /zu on, /zu status")
+        Z.Print("off. Commands: /zu on, /zu status, /zu config")
     end
 end

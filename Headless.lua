@@ -15,6 +15,7 @@ local OVERRIDES = {
     foglight = false, -- Zygor's world map overlay
     showmapbutton = false, -- Zygor's minimap button
     nc_enable = false, -- Zygor's notification center
+    n_popup_guides = false, -- Zygor's "next guide" popup; the tracker's next-guide line replaces it
     -- Read at combat start to fade the window, which would pause the step checker.
     -- Zuestie never calls the option's setter: it registers secure state drivers on the arrow
     -- and item bar, which errors before Zygor builds them. The arrow keeps its own combat setting.

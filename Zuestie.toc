@@ -14,3 +14,4 @@ Headless.lua
 Tracker.lua
 Pins.lua
 Menu.lua
+Options.lua
