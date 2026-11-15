@@ -529,13 +529,16 @@ end
 PAST.steps = {S{Accept(900, "Wolves at Our Heels")}, S{Accept(57, "The Night Watch")}}
 MID.steps = {S{Accept(177, "Look To The Stars")}}
 DEST.steps = {S{G{action = "goto", status = "incomplete", text = "Go to Darkshire"}},
-    S{Accept(58, "The Night Watch"), Accept(181, "Look To The Stars")}, S{Accept(133, "Ghoulish Effigy")}}
+    S{Accept(58, "The Night Watch"), Accept(181, "Look To The Stars")},
+    S{Accept(133, "Ghoulish Effigy"), Accept(3503, "Meeting with the Master")}}
 for _, guide in ipairs({PAST, MID, DEST}) do GUIDES[#GUIDES + 1] = guide end
 QDATA[181] = {preQuestSingle = {177}}
-QDATA[159] = {requiredClasses = 1}
+QDATA[159] = {name = "Juice Delivery", requiredClasses = 1}
+QDATA[56] = {name = "The Night Watch"}
 QDATA[57] = {name = "The Night Watch"}
 QDATA[177] = {name = "Look To The Stars"}
-ZGV.Chains = {[58] = 57, [57] = 56, [133] = 159}
+QDATA[3503] = {name = "Meeting with the Master"}
+ZGV.Chains = {[58] = 57, [57] = 56, [133] = 159, [3503] = 3381} -- quest 3381 is not in the game (no Questie record)
 ZGV.ChainsBreadcrumbs, ZGV.RevChains = {}, {}
 ZGV.completedQuests = {[56] = true}
 ZGV.db.char = {}
@@ -557,6 +560,8 @@ check(ZGV.Chains[181] == 177 and ZGV.RevChains[177][1] == 181, "Questie's prereq
 M("TrackerQuestTooltip").Show(offer)
 check(table.concat(GameTooltip.lines, "\n"):find("Look To The Stars | Westfall (25-26)", 1, true) ~= nil,
     "catch-up tooltip lists each quest with its guide")
+check(ZGV.Chains[3503] == nil and not table.concat(GameTooltip.lines, "\n"):find("Not in Zygor's guides", 1, true),
+    "a prerequisite the game does not have blocks nothing, in Zygor's chains too")
 offer.scripts.OnClick(offer, "LeftButton")
 RunTimers()
 check(LOADED == PAST.title and ZGV.CurrentStepNum == 2, "catch-up starts at the earliest guide step with a needed quest")

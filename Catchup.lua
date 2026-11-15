@@ -15,7 +15,7 @@ Z.Catchup = C
 local MAX_DEPTH = 40
 local MAX_TOOLTIP_QUESTS = 12
 
-local asked = {} -- [questId] = true once Questie was asked for its prerequisites
+local checked = {} -- [questId] = true once the quest's prerequisites were checked against Questie
 local forPlayer = {} -- [questId] = whether Questie's race and class requirements allow the player
 local pastGuides = {} -- [guide title] = {list = titles oldest first, ending with the guide, index = {[title] = i}}
 local revision = 0
@@ -100,6 +100,16 @@ local function AddReverse(pre, post)
     table.insert(rev, post)
 end
 
+-- {mode, id, ...} in Zygor's chain format: nil without ids, the id alone when there is one.
+local function Collapse(pre)
+    if #pre == 1 then
+        return nil
+    elseif #pre == 2 then
+        return pre[2]
+    end
+    return pre
+end
+
 -- Questie's prerequisites in Zygor's chain format: a quest id, or {"AND"|"OR", id, ...}.
 -- preQuestGroup needs all of them, preQuestSingle any of them. A group member counts as done when one of
 -- its exclusive alternatives is done (Questie's rule); a negative member skips that check.
@@ -133,22 +143,50 @@ local function FromQuestie(q)
             pre[#pre + 1] = id
         end
     end
-    if #pre == 1 then
-        return nil
-    elseif #pre == 2 then
-        return pre[2]
+    return Collapse(pre)
+end
+
+-- Quests the game does not have: Questie has no record of them. Zygor's chain data names a few as
+-- prerequisites (Meeting with the Master needs 3381), which would block those quests forever.
+local function Exists(q)
+    return QuestieField(q, "name") ~= nil
+end
+
+-- A Zygor chain value without the quests the game does not have.
+local function WithoutMissing(pre)
+    if type(pre) == "number" then
+        return Exists(pre) and pre or nil
+    elseif type(pre) ~= "table" then
+        return pre
     end
-    return pre
+    local kept = {}
+    for _, p in ipairs(pre) do
+        if type(p) ~= "number" or Exists(p) then
+            kept[#kept + 1] = p
+        end
+    end
+    if #kept == #pre then
+        return pre
+    elseif type(kept[1]) == "number" then
+        table.insert(kept, 1, "AND")
+    end
+    return Collapse(kept)
 end
 
 -- Zygor's prerequisites for a quest. Where Zygor has none, Questie's are added to Zygor's chain tables,
 -- so Zygor's own quest checks use them too.
+-- Quests the game does not have are dropped from Zygor's own entries, for Zygor's checks too.
 local function Prereqs(q)
     local pre = ZGV.Chains[q]
-    if pre ~= nil or asked[q] or not QuestieReady() then
+    if checked[q] or not QuestieReady() then
         return pre
     end
-    asked[q] = true
+    checked[q] = true
+    if pre ~= nil then
+        pre = WithoutMissing(pre)
+        ZGV.Chains[q] = pre
+        return pre
+    end
     pre = FromQuestie(q)
     if pre == nil then
         return nil
@@ -422,12 +460,13 @@ function C.Line()
         }
     end
     local guide, step = ZGV.CurrentGuide, ZGV.CurrentStepNum
-    if not Z.Setting("catchUp") or not (guide and guide.steps and step) then
+    if not (guide and guide.steps and step) then
         return nil
     end
+    -- Counted even with the line switched off: counting also cleans the prerequisites Zygor's quest checks read.
     local need = C.Needed(guide, step)
     local text
-    if not need then
+    if not need or not Z.Setting("catchUp") then
         return nil
     elseif need.count > 0 then
         text = ("Earlier quests needed: %d, from %s"):format(need.count, Describe(need))
