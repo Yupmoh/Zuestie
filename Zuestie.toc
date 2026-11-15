@@ -1,0 +1,16 @@
+## Interface: 16001
+## Title: Zuestie
+## Notes: Shows Zygor guide steps inside Questie's tracker and map.
+## Author: Moh
+## Version: @project-version@
+## Category: Quests
+## Dependencies: Questie, ZygorGuidesViewerForever
+## SavedVariables: ZuestieDB
+## IconTexture: Interface\AddOns\Questie\Icons\questie.png
+
+Core.lua
+Model.lua
+Headless.lua
+Tracker.lua
+Pins.lua
+Menu.lua
