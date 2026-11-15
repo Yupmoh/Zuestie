@@ -357,6 +357,8 @@ SlashCmdList.ZUESTIE = function(msg)
         Z.PrintStatus()
     elseif msg == "lines" then
         Z.PrintLines()
+    elseif msg == "quests" then
+        Z.Pins.Report()
     elseif Z.active then
         Z.Menu.Open()
     else
