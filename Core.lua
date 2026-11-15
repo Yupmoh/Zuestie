@@ -39,6 +39,7 @@ Z.DEFAULTS = {
     mapPins = true, -- the step's waypoints on the map and minimap
     violetQuests = true, -- violet "!" for quests the guides pick up
     nextGuides = 3, -- next guides in Zygor's order whose quests count as guide quests
+    catchUp = true, -- offer to catch up on earlier quests the guide needs
 }
 
 function Z.Setting(key)
@@ -173,6 +174,8 @@ function Z.Refresh()
         return
     end
     Z.Headless.KeepAlive()
+    -- A finished catch-up loads the guide it came from; build the model after that.
+    Z.Try(Z.Catchup.Update)
     -- First: Questie's quest titles read the guide quest set while the tracker lays out.
     Z.Pins.UpdateGuideQuests()
     local ok, m = Z.Try(Z.BuildModel)
@@ -250,6 +253,7 @@ function Z.PrintStatus()
         Z.Print("Guide: none loaded")
     end
     Z.Print(("Step changes since login while on: %d"):format(Z.stepChanges))
+    Z.Print(Z.Catchup.Status())
     if Z.lastError then
         Z.Print("Last error: " .. tostring(Z.lastError))
     end
@@ -283,6 +287,9 @@ local function OnZygorMessage(message)
         -- Zygor's startup can rebuild its map button and overlays; set them again.
         Z.Headless.ApplySideEffects()
     end
+    if message ~= "ZGV_GOAL_PROGRESS" then
+        Z.Catchup.Invalidate() -- Zygor's quest log view may have changed
+    end
     Z.RefreshSoon()
 end
 
@@ -309,7 +316,14 @@ local function WaitForZygor()
             Z:RegisterMessage(message, OnZygorMessage)
         end
         -- Quest progress also moves Zygor's sticky steps, which send no messages of their own.
-        Questie.API.RegisterForQuestUpdates(Z.RefreshSoon)
+        -- Accepted, turned-in and abandoned quests change which earlier quests the guide still needs.
+        Questie.API.RegisterForQuestUpdates(function(_, _, reason)
+            local reasons = Questie.API.Enums and Questie.API.Enums.QuestUpdateTriggerReason
+            if not reasons or reason ~= reasons.QUEST_UPDATED then
+                Z.Catchup.Invalidate()
+            end
+            Z.RefreshSoon()
+        end)
         C_Timer.NewTicker(POLL_SECONDS, Z.Refresh)
         if ZuestieDB.enabled then
             Z.Activate()
@@ -399,6 +413,8 @@ SlashCmdList.ZUESTIE = function(msg)
         Z.PrintLines()
     elseif msg == "quests" then
         Z.Pins.Report()
+    elseif msg == "catchup" then
+        Z.Catchup.Toggle()
     elseif msg == "config" or msg == "settings" or msg == "options" then
         Z.Options.Open()
     elseif Z.active then

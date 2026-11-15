@@ -71,7 +71,7 @@ local function Format(line)
         return "|cFFC0C0C0" .. line.text .. ":|r"
     elseif line.kind == "progress" then
         return ProgressText(line)
-    elseif line.kind == "nextguide" then
+    elseif line.kind == "nextguide" or line.kind == "catchup" then
         return GUIDE_ICON .. GUIDE_COLOR .. line.text .. "|r"
     elseif line.kind == "tip" then
         -- Several |tip lines arrive joined by line breaks; one line keeps the section short.
@@ -104,6 +104,14 @@ local function OnLineClick(self, button)
     end
     if data.kind == "nextguide" and button ~= "RightButton" then
         Z.Menu.LoadGuide(data.guide)
+        return
+    end
+    if data.kind == "catchup" and button ~= "RightButton" then
+        if data.active then
+            Z.Catchup.Stop()
+        else
+            Z.Catchup.Start()
+        end
         return
     end
     if data.kind == "title" and not ZGV.CurrentGuide then
@@ -355,6 +363,8 @@ local function ShowTooltip(line)
     elseif data.kind == "nextguide" then
         tip:AddLine(data.guide.title_short or data.guide.title, 1, 0.82, 0)
         tip:AddLine("Click: load this guide", 0.6, 0.6, 0.6)
+    elseif data.kind == "catchup" then
+        Z.Catchup.Tooltip(tip, data)
     elseif data.goal then
         local goal = data.goal
         tip:AddLine(Strip(data.text), 1, 1, 1, true)

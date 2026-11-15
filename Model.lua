@@ -182,6 +182,10 @@ function Z.BuildModel()
     m.guideName = short or name
     m.title = (levels and "(" .. levels .. ") " or "") .. ("Step %d/%d"):format(ZGV.CurrentStepNum or step.num or 0, #guide.steps)
     AddProgress(m)
+    local ok, catchup = Z.Try(Z.Catchup.Line)
+    if ok and catchup then
+        tinsert(m.lines, catchup)
+    end
     AddStep(m, step, false)
 
     local profile = ZGV.db.profile

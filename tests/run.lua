@@ -87,6 +87,7 @@ WorldMapFrame = NewFrame("Frame", "WorldMapFrame")
 GameTooltip = {lines = {}}
 function GameTooltip:SetOwner(owner) self.owner = owner self.lines = {} end
 function GameTooltip:AddLine(text) self.lines[#self.lines + 1] = text end
+function GameTooltip:AddDoubleLine(left, right) self.lines[#self.lines + 1] = left .. " | " .. right end
 function GameTooltip:SetItemByID(id) self.item = id end
 function GameTooltip:Show() self.shown = true end
 function GameTooltip:Hide() self.shown = false end
@@ -246,6 +247,10 @@ M("ZoneDB").GetAreaIdByUiMapId = function(_, map)
     if map == 999 then error("No AreaId found for UiMapId: 999") end
     return map + 10000
 end
+local QDATA = {}
+M("QuestieDB").QueryQuestSingle = function(id, field) return QDATA[id] and QDATA[id][field] end
+M("QuestiePlayer").HasRequiredRace = function() return true end
+M("QuestiePlayer").HasRequiredClass = function(classes) return classes == nil end
 
 local questCallbacks = {}
 Questie = {
@@ -269,6 +274,7 @@ local function G(t) return setmetatable(t, Goal) end
 local Step = {}
 Step.__index = Step
 function Step:IsComplete() return false end
+function Step:AreRequirementsMet() return not self.otherClass end
 local function S(goals) return setmetatable({goals = goals}, Step) end
 local Guide = {}
 Guide.__index = Guide
@@ -348,6 +354,7 @@ end
 function ZGV:ReanchorFrame() self.Frame:ClearAllPoints() self.Frame:SetPoint("TOPLEFT", self.Frame:GetParent()) end
 function ZGV:ShowWaypoints() end
 function ZGV:UpdateMapButton() end
+function ZGV:SanitizeGuideTitle(title) return (title:gsub("^Leveling Guides\\", "LEVELING\\")) end
 
 -- Load Zuestie in TOC order ----------------------------------------------------------------
 -- Load Zuestie in TOC order. A runner without file access can pass ZUESTIE_FILES and ZUESTIE_SOURCES.
@@ -495,11 +502,82 @@ check(not item.shown and item.parent == UIParent, "item button leaves with its s
 nextLine.scripts.OnClick(nextLine, "LeftButton")
 check(LOADED == NEXT1.title, "clicking the next-guide line loads it")
 
+-- Catch-up
+-- Duskwood (30-32) needs The Night Watch (57) from Duskwood (24-25) and Look To The Stars (177) from
+-- Westfall (25-26). Zygor's chains know the first, Questie the second. Quest 159 is for another class.
+local PAST = NewGuide("LEVELING\\Duskwood (24-25)", {next = "Leveling Guides\\Westfall (25-26)"})
+local MID = NewGuide("LEVELING\\Westfall (25-26)", {next = "Leveling Guides\\Duskwood & Stranglethorn Vale (30-32)"})
+local DEST = NewGuide("LEVELING\\Duskwood & Stranglethorn Vale (30-32)")
+local function Accept(q, name)
+    return G{action = "accept", status = "incomplete", text = "Accept '" .. name .. "'", questid = q}
+end
+PAST.steps = {S{Accept(900, "Wolves at Our Heels")}, S{Accept(57, "The Night Watch")}}
+MID.steps = {S{Accept(177, "Look To The Stars")}}
+DEST.steps = {S{G{action = "goto", status = "incomplete", text = "Go to Darkshire"}},
+    S{Accept(58, "The Night Watch"), Accept(181, "Look To The Stars")}, S{Accept(133, "Ghoulish Effigy")}}
+for _, guide in ipairs({PAST, MID, DEST}) do GUIDES[#GUIDES + 1] = guide end
+QDATA[181] = {preQuestSingle = {177}}
+QDATA[159] = {requiredClasses = 1}
+QDATA[57] = {name = "The Night Watch"}
+QDATA[177] = {name = "Look To The Stars"}
+ZGV.Chains = {[58] = 57, [57] = 56, [133] = 159}
+ZGV.ChainsBreadcrumbs, ZGV.RevChains = {}, {}
+ZGV.completedQuests = {[56] = true}
+ZGV.db.char = {}
+local char = ZGV.db.char
+ZGV.QuestDB = {GuideForQuest = {[57] = {PAST.title}, [177] = {MID.title}, [159] = {PAST.title}},
+    Cancel = function() char.SISquests, char.SISguides, char.SISdestination, char.SISstarted = nil, nil, nil, nil end}
+function ZGV:SetGuide(title, step)
+    LOADED = title
+    self.CurrentGuide = self:GetGuideByTitle(title)
+    self.CurrentStepNum = step or 1
+    self.CurrentStep = self.CurrentGuide.steps[self.CurrentStepNum]
+end
+ZGV:SetGuide(DEST.title, 2)
+MESSAGES.ZGV_GUIDE_LOADED("ZGV_GUIDE_LOADED")
+RunTimers()
+local offer = Find("Earlier quests needed: 2, from 2 earlier guides")
+check(offer ~= nil, "catch-up line counts the earlier quests the guide needs")
+check(ZGV.Chains[181] == 177 and ZGV.RevChains[177][1] == 181, "Questie's prerequisite fills a gap in Zygor's quest chains")
+M("TrackerQuestTooltip").Show(offer)
+check(table.concat(GameTooltip.lines, "\n"):find("Look To The Stars | Westfall (25-26)", 1, true) ~= nil,
+    "catch-up tooltip lists each quest with its guide")
+offer.scripts.OnClick(offer, "LeftButton")
+RunTimers()
+check(LOADED == PAST.title and ZGV.CurrentStepNum == 2, "catch-up starts at the earliest guide step with a needed quest")
+check(char.SISdestination[1] == DEST.title and char.SISdestination[2] == 2, "catch-up returns to the step it started from")
+check(char.SISquests[57] == PAST.title and char.SISquests[177] == MID.title and char.SISquests[159] == nil,
+    "catch-up leaves out quests of another class")
+check(char.SISguides[PAST.title] == true and char.SISguides[MID.title] == true and char.SISguides[DEST.title] == 2,
+    "Zygor skips through the earlier guides up to the step")
+check(p.beta_use_chains == true, "Zygor's quest-chain checks on while Zuestie is on")
+check(Find("Catching up: 2 earlier quests left") ~= nil, "catch-up line shows what is left")
+SlashCmdList.ZUESTIE("catchup")
+RunTimers()
+check(char.SISquests == nil and char.SISdestination == nil and not Labels():find("Catching up"), "/zu catchup stops it")
+check(char.SISstarted == true, "Zygor's quest-chain checks stay on after a catch-up ends")
+check(ZGV.CurrentGuide == DEST and ZGV.CurrentStepNum == 2, "stopping goes back to the step the catch-up started from")
+check(Find("Earlier quests needed: 2") ~= nil, "stopping shows the same offer again, not one for the earlier guide")
+SlashCmdList.ZUESTIE("catchup")
+RunTimers()
+check(LOADED == PAST.title and char.SISquests ~= nil, "/zu catchup starts it again")
+ZGV.completedQuests[57] = true
+questCallbacks[1](57, nil, 3)
+RunTimers()
+check(Find("Catching up: 1 earlier quest left") ~= nil, "turning in a needed quest counts down")
+ZGV.completedQuests[177] = true
+questCallbacks[1](177, nil, 3)
+RunTimers()
+check(ZGV.CurrentGuide == DEST and ZGV.CurrentStepNum == 2 and char.SISquests == nil,
+    "jumps back to the step once the earlier quests are done")
+check(not Labels():find("Catching up") and not Labels():find("Earlier quests"), "no catch-up line once caught up")
+
 -- Back to Zygor and logout
 SlashCmdList.ZUESTIE("zygor")
 check(Z.active == false, "/zu zygor turns Zuestie off")
 check(p.enable_actionbar == true and p.mapicons == true and p.foglight == true and p.n_popup_guides == true,
     "restores Zygor's settings")
+check(p.beta_use_chains == nil, "turns Zygor's quest-chain checks back off")
 point, relativeTo = zframe:GetPoint(1)
 check(point == "TOPLEFT" and relativeTo == master and zframe.clamped, "puts Zygor's window back")
 check(#PINS == 0, "removes the step pins")
