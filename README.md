@@ -25,6 +25,15 @@ WowUp updates Zuestie like any other addon when a new release comes out.
 - The book button on the step line chooses a guide. The arrows go back a step or skip one.
 - Click a step line to point the arrow there or confirm it. Right-click for the guide menu.
 - Click the progress bar to switch between quests, steps and XP.
+- Steps that say to use an item get a clickable item button. The buttons appear or move only out of combat; clicking them works in combat.
+- On a guide's last step, a "Next guide" line loads the next guide in Zygor's order.
+- Quests your guides use get a violet "!" in Questie's quest list too.
+
+## Settings
+
+Esc, then Options, then AddOns, then Zuestie (or type `/zu config`). Switch the progress bar, tips, step-line buttons, item buttons, quest-list marks, map pins and violet "!" on or off, choose how many next guides count, and change Zygor's arrow style and size.
+
+## Commands
 
 | Command | What it does |
 |---|---|
@@ -33,12 +42,17 @@ WowUp updates Zuestie like any other addon when a new release comes out.
 | `/zu zygor` | Turn Zuestie off and get Zygor's own window back |
 | `/zu on` | Turn Zuestie on again |
 | `/zu status` | Check that Zygor's engine is running |
+| `/zu config` | Open the settings |
 | `/zu lines` | Print the guide lines with their raw text, for bug reports |
 | `/zu quests` | Show which of Questie's "!" belong to your guides and how many are violet |
 
 ## Bugs
 
-Open an issue with a screenshot and the output of `/zu status` and `/zu lines`.
+[Open a bug report](https://github.com/Yupmoh/Zuestie/issues/new?template=bug_report.yml). The form asks for the output of `/zu status` and a screenshot.
+
+## Development
+
+`lua5.1 tests/run.lua` runs the offline checks. GitHub runs them on every push, and a version tag publishes a release only when they pass.
 
 ## License
 
