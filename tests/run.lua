@@ -157,6 +157,10 @@ function GetQuestObjectiveInfo(questId, i)
 end
 OPENED_CATEGORY = nil
 Settings = {OpenToCategory = function(id) OPENED_CATEGORY = id end}
+LOCKPICKING = 14
+C_SkillInfo = {GetSkillLineInfoByID = function(id)
+    if id == 633 then return {name = "Lockpicking", rank = LOCKPICKING, maxRank = 100, skillID = 633} end
+end}
 
 -- Libraries --------------------------------------------------------------------------------
 local MESSAGES = {}
@@ -337,7 +341,11 @@ ZGV = {
     IsDataProviderRegistered = function() return FOG end,
     NotificationCenter = {UpdateButton = function() end},
     Tabs = {Pool = {}, TryToActivateGuide = function() return false end},
+    Professions = {tradeskillsIdByName = {Cooking = 185, Riding = 762},
+        known = {Cooking = {level = 126, max = 150, skillID = 185, name = "Cooking"}},
+        placeholder = {active = false, level = 0, max = 0, placeholder = true}},
 }
+function ZGV.Professions:GetSkill(name) return self.known[name] or self.placeholder end
 function ZGV:SetGuide(title) LOADED = title end
 function ZGV:FocusStep() end
 function ZGV:SkipStep() end
@@ -416,6 +424,13 @@ Tick()
 check(UPDATES == 1, "no layout when nothing changed")
 
 check(KILL.objnum == 1, "links a kill line without an objective to the quest's objective")
+
+-- Skills Zygor misses
+check(ZGV.Professions:GetSkill("Lockpicking").level == 14 and ZGV.Professions:GetSkill("Lockpicking").max == 100,
+    "reads Lockpicking, which Zygor does not track")
+LOCKPICKING = 15
+check(ZGV.Professions:GetSkill("Lockpicking").level == 15, "Lockpicking follows skill-ups")
+check(ZGV.Professions:GetSkill("Cooking").level == 126, "keeps Zygor's own skill values")
 
 -- Quest list marks
 local q245, q777 = Find("Quest 245"), Find("Quest 777")

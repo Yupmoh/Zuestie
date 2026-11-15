@@ -312,6 +312,7 @@ local function WaitForZygor()
         end
         local AceEvent = LibStub("AceEvent-3.0")
         AceEvent:Embed(Z)
+        Z.Try(Z.RepairSkills)
         for _, message in ipairs(ZYGOR_MESSAGES) do
             Z:RegisterMessage(message, OnZygorMessage)
         end
@@ -344,6 +345,8 @@ events:RegisterEvent("ZONE_CHANGED_NEW_AREA")
 events:RegisterEvent("PLAYER_XP_UPDATE")
 -- Cooldown swirl on the guide's item buttons.
 events:RegisterEvent("BAG_UPDATE_COOLDOWN")
+-- Skill-ups move skill goals such as "Reach Level 75 in Lockpicking".
+events:RegisterEvent("SKILL_LINES_CHANGED")
 events:SetScript("OnEvent", function(_, event, arg1)
     if event == "ADDON_LOADED" and arg1 == "Zuestie" then
         ZuestieDB = ZuestieDB or {}
