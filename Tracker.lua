@@ -137,6 +137,9 @@ end
 local function ButtonTooltip(self)
     GameTooltip:SetOwner(self, "ANCHOR_LEFT")
     GameTooltip:AddLine(self.tip, 1, 0.82, 0)
+    if self.hint then
+        GameTooltip:AddLine(self.hint(), 0.6, 0.6, 0.6)
+    end
     GameTooltip:Show()
 end
 
@@ -148,7 +151,17 @@ end
 -- puts the buttons in front of quest titles. Three frames made once, moved onto each layout's step line.
 local SLOT_GAP = 2
 local BUTTONS = {
-    {key = "guides", tip = "Choose a guide", texture = "Interface\\Icons\\INV_Misc_Book_09", click = function() Z.Menu.OpenGuides() end},
+    {key = "guides", tip = "Choose a guide", texture = "Interface\\Icons\\INV_Misc_Book_09",
+        click = function(_, mouse)
+            if mouse == "RightButton" then
+                Z.Options.ToggleArrow()
+            else
+                Z.Menu.OpenGuides()
+            end
+        end,
+        hint = function()
+            return ZGV.db.profile.arrowshow and "Right-click: hide the arrow" or "Right-click: show the arrow"
+        end},
     {key = "prev", tip = "Previous step", texture = "Interface\\Buttons\\UI-SpellbookIcon-PrevPage", paged = true, click = function() Z.PrevStep() end},
     {key = "next", tip = "Next step (skip)", texture = "Interface\\Buttons\\UI-SpellbookIcon-NextPage", paged = true, click = function() Z.SkipStep() end},
 }
@@ -160,6 +173,10 @@ local function GetButton(spec)
     if not button then
         button = CreateFrame("Button")
         button.tip = spec.tip
+        button.hint = spec.hint
+        if spec.hint then
+            button:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+        end
         if spec.paged then
             button:SetNormalTexture(spec.texture .. "-Up")
             button:SetPushedTexture(spec.texture .. "-Down")

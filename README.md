@@ -22,7 +22,7 @@ WowUp updates Zuestie like any other addon when a new release comes out.
 
 ## Use
 
-- The book button on the step line chooses a guide. The arrows go back a step or skip one.
+- The book button on the step line chooses a guide; right-click it to hide or show Zygor's arrow. The arrows go back a step or skip one.
 - Click a step line to point the arrow there or confirm it. Right-click for the guide menu.
 - Click the progress bar to switch between quests, steps and XP.
 - Steps that say to use an item get a clickable item button. The buttons appear or move only out of combat; clicking them works in combat.

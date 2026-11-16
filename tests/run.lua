@@ -531,6 +531,23 @@ args.arrow.args.arrowskin.set(nil, "Starlight")
 COMBAT = false
 check(p.arrowskin == "Stealth", "arrow is not rebuilt during combat")
 
+-- Book button: left-click chooses a guide, right-click hides or shows the arrow
+local book
+for _, f in ipairs(FRAMES) do
+    if f.normal == "Interface\\Icons\\INV_Misc_Book_09" then book = f end
+end
+LAST_MENU = nil
+book.scripts.OnClick(book, "LeftButton")
+check(LAST_MENU ~= nil and p.arrowshow == true, "left-clicking the book button opens the guide menu")
+book.scripts.OnClick(book, "RightButton")
+check(p.arrowshow == false, "right-clicking the book button hides the arrow")
+COMBAT = true
+book.scripts.OnClick(book, "RightButton")
+COMBAT = false
+check(p.arrowshow == false, "the arrow is not shown or hidden during combat")
+book.scripts.OnClick(book, "RightButton")
+check(p.arrowshow == true, "right-clicking again shows the arrow")
+
 -- End of guide
 ZGV.CurrentStep, ZGV.CurrentStepNum = LAST, 2
 MESSAGES.ZGV_STEP_CHANGED("ZGV_STEP_CHANGED")

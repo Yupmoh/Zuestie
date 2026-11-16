@@ -46,6 +46,23 @@ local function ArrowSkins()
     return skins
 end
 
+local setArrowShown = ArrowSet(function(value)
+    ZGV.db.profile.arrowshow = value
+    ZGV.Pointer:UpdateArrowVisibility()
+end)
+
+-- Right-click on the tracker's book button.
+function O.ToggleArrow()
+    if not ZygorReady() then
+        return
+    end
+    local show = not ZGV.db.profile.arrowshow
+    setArrowShown(nil, show)
+    if ZGV.db.profile.arrowshow == show then
+        Z.Print(show and "arrow shown." or "arrow hidden. Right-click the book button to show it again.")
+    end
+end
+
 local options = {
     type = "group",
     name = "Zuestie",
@@ -104,11 +121,9 @@ local options = {
                     type = "toggle",
                     width = "full",
                     name = "Show the arrow",
+                    desc = "Right-clicking the book button in the tracker also hides or shows it.",
                     get = function() return ZygorReady() and ZGV.db.profile.arrowshow end,
-                    set = ArrowSet(function(value)
-                        ZGV.db.profile.arrowshow = value
-                        ZGV.Pointer:UpdateArrowVisibility()
-                    end),
+                    set = setArrowShown,
                 },
                 arrowskin = {
                     order = 2,
