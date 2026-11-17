@@ -352,6 +352,8 @@ ZGV = {
     Pointer = {
         ArrowSkins = {Starlight = {name = "Starlight"}, Stealth = {name = "Stealth"}},
         ClearSet = function() end,
+        ClearAntsAndLines = function() LINES_CLEARED = (LINES_CLEARED or 0) + 1 end,
+        AnimateAnts = function() LINES_DRAWN = (LINES_DRAWN or 0) + 1 end,
         ClearWaypoints = function() end,
         SetWaypoint = function(_, m, x, y) return {m = m, x = x, y = y} end,
         FindTravelPath = function(self, way) self.DestinationWaypoint = way end,
@@ -588,6 +590,14 @@ COMBAT = true
 args.arrow.args.arrowskin.set(nil, "Starlight")
 COMBAT = false
 check(p.arrowskin == "Stealth", "arrow is not rebuilt during combat")
+local pathLines = args.pathLines.args
+pathLines.maplines_enabled.set(nil, true)
+check(p.maplines_enabled == true and pathLines.maplines_enabled.get() == true and LINES_CLEARED == 1 and LINES_DRAWN == 1,
+    "path lines setting turns Zygor's lines on and redraws them")
+pathLines.maplines.set(nil, 1)
+check(p.maplines == 1 and LINES_DRAWN == 2, "path line style changes Zygor's lines")
+pathLines.maplines_enabled.set(nil, false)
+check(p.maplines_enabled == false and pathLines.maplines.disabled(), "path lines off; style greys out")
 
 -- Book button: left-click chooses a guide, right-click hides or shows the arrow
 local book

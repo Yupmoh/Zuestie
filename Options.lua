@@ -51,6 +51,21 @@ local setArrowShown = ArrowSet(function(value)
     ZGV.Pointer:UpdateArrowVisibility()
 end)
 
+-- Zygor's path lines ("ant trails"): the travel route to the next place on the world map and minimap.
+-- These write Zygor's own settings and redraw the lines, as Zygor's options page does.
+local function PathLinesSet(key)
+    return function(_, value)
+        if not ZygorReady() then
+            return
+        end
+        ZGV.db.profile[key] = value
+        Z.Try(function()
+            ZGV.Pointer:ClearAntsAndLines()
+            ZGV.Pointer:AnimateAnts()
+        end)
+    end
+end
+
 -- Right-click on the tracker's book button.
 function O.ToggleArrow()
     if not ZygorReady() then
@@ -106,6 +121,33 @@ local options = {
                     get = Get,
                     set = Set,
                     disabled = function() return not Z.Setting("violetQuests") end,
+                },
+            },
+        },
+        pathLines = {
+            order = 25,
+            type = "group",
+            inline = true,
+            name = "Path lines (Zygor's settings)",
+            disabled = function() return not ZygorReady() end,
+            args = {
+                maplines_enabled = {
+                    order = 1,
+                    type = "toggle",
+                    width = "full",
+                    name = "Show path lines",
+                    desc = "Zygor's travel route to the next place, on the world map and minimap.",
+                    get = function() return ZygorReady() and ZGV.db.profile.maplines_enabled end,
+                    set = PathLinesSet("maplines_enabled"),
+                },
+                maplines = {
+                    order = 2,
+                    type = "select",
+                    name = "Style",
+                    values = {[1] = "Moving dots", [2] = "Solid line"},
+                    get = function() return ZygorReady() and ZGV.db.profile.maplines end,
+                    set = PathLinesSet("maplines"),
+                    disabled = function() return not (ZygorReady() and ZGV.db.profile.maplines_enabled) end,
                 },
             },
         },
