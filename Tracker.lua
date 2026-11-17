@@ -29,6 +29,7 @@ local function Icon(path)
 end
 local GUIDE_ICON = Icon(Z.ICON_PATH .. "available_guide.png")
 local BLANK = Icon(Z.ICON_PATH .. "blank.png") -- keeps text aligned on lines without an icon
+local SWITCH_ICON = Icon("Interface\\Buttons\\UI-RefreshButton")
 local CHECK = Icon("Interface\\RaidFrame\\ReadyCheck-Ready")
 local CROSS = Icon("Interface\\RaidFrame\\ReadyCheck-NotReady")
 local ACTION_ICONS = {
@@ -73,6 +74,8 @@ local function Format(line)
         return ProgressText(line)
     elseif line.kind == "nextguide" or line.kind == "catchup" then
         return GUIDE_ICON .. GUIDE_COLOR .. line.text .. "|r"
+    elseif line.kind == "tabs" then
+        return SWITCH_ICON .. "|cFFC0C0C0" .. line.text .. "|r"
     elseif line.kind == "tip" then
         -- Several |tip lines arrive joined by line breaks; one line keeps the section short.
         local tip = Strip(line.text):gsub("|n", "  "):gsub("\n", "  ")
@@ -182,6 +185,14 @@ local function OnLineClick(self, button)
     end
     if data.kind == "nextguide" and button ~= "RightButton" then
         Z.Menu.LoadGuide(data.guide)
+        return
+    end
+    if data.kind == "tabs" then
+        if button == "RightButton" then
+            Z.Menu.OpenTabs()
+        else
+            Z.SwitchGuide(1)
+        end
         return
     end
     if data.kind == "catchup" and button ~= "RightButton" then
@@ -462,6 +473,19 @@ local function ShowTooltip(line)
     elseif data.kind == "nextguide" then
         tip:AddLine(data.guide.title_short or data.guide.title, 1, 0.82, 0)
         tip:AddLine("Click: load this guide", 0.6, 0.6, 0.6)
+    elseif data.kind == "tabs" then
+        tip:AddLine("Open guides", 1, 0.82, 0)
+        local tabs, current = Z.OpenTabs()
+        for i, tab in ipairs(tabs) do
+            local name = tab.guide.title_short or tab.guide.title
+            if i == current then
+                tip:AddLine("> " .. name, 0.4, 1, 0.4)
+            else
+                tip:AddLine(name, 1, 1, 1)
+            end
+        end
+        tip:AddLine("Click: switch to the next guide", 0.6, 0.6, 0.6)
+        tip:AddLine("Right-click: pick or close a guide", 0.6, 0.6, 0.6)
     elseif data.kind == "catchup" then
         Z.Catchup.Tooltip(tip, data)
     elseif data.goal then

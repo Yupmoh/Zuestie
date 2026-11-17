@@ -367,7 +367,8 @@ ZGV = {
     Foglight = {DataProvider = {name = "fog"}, ToggleOverlay = function() FOG = not FOG end},
     IsDataProviderRegistered = function() return FOG end,
     NotificationCenter = {UpdateButton = function() end},
-    Tabs = {Pool = {}, TryToActivateGuide = function() return false end},
+    Tabs = {Pool = {}, TryToActivateGuide = function() return false end,
+        LoadGuideToTab = function(_, title, step) TAB_OPENED = {title, step} end},
     BugReport = {GuideRating = {}},
     Professions = {tradeskillsIdByName = {Cooking = 185, Riding = 762},
         known = {Cooking = {level = 126, max = 150, skillID = 185, name = "Cooking"}},
@@ -641,6 +642,46 @@ local rating = ZGV.BugReport.GuideRating
 rating:CreateAltFrame()
 check(not rating.NoRatingFrame.clamped, "Zygor's end-of-guide panel stays off-screen with its window")
 
+-- Several open guides (Zygor's tabs)
+local function Tab(guide)
+    local tab = {guide = guide, step = 1}
+    function tab:ActivateGuide() ZGV.Tabs.ActiveTab, ZGV.CurrentGuide = self, self.guide end
+    function tab:RemoveTab()
+        for i, t in ipairs(ZGV.Tabs.Pool) do
+            if t == self then table.remove(ZGV.Tabs.Pool, i) break end
+        end
+        self.guide = nil
+        ZGV.Tabs.Pool[1]:ActivateGuide()
+    end
+    return tab
+end
+local tabA, tabB = Tab(CURRENT), Tab(NEXT1)
+ZGV.Tabs.Pool, ZGV.Tabs.ActiveTab = {tabA, tabB}, tabA
+MESSAGES.ZGV_STEP_CHANGED("ZGV_STEP_CHANGED")
+RunTimers()
+local tabsLine = Find("2 guides open, next: Wetlands %(27%-29%)")
+check(tabsLine ~= nil, "with two guides open, a line names the next one")
+tabsLine.scripts.OnClick(tabsLine, "LeftButton")
+check(ZGV.CurrentGuide == NEXT1 and ZGV.Tabs.ActiveTab == tabB, "clicking it switches to the next open guide")
+local function MenuEntry(list, pattern)
+    for _, entry in ipairs(list) do
+        if entry.text and entry.text:find(pattern) then return entry end
+        local found = entry.menuList and MenuEntry(entry.menuList, pattern)
+        if found then return found end
+    end
+end
+Z.Menu.OpenGuides()
+MenuEntry(LAST_MENU, "^Ashenvale %(29%-30%)$").func()
+check(TAB_OPENED and TAB_OPENED[1] == NEXT2.title and #ZGV.Tabs.Pool == 2,
+    "a guide picked from the menu opens in its own tab, next to the open ones")
+Z.Menu.Open()
+MenuEntry(LAST_MENU, "^Close this guide: Wetlands").func()
+check(#ZGV.Tabs.Pool == 1 and ZGV.CurrentGuide == CURRENT, "closing a guide closes its tab and shows the other one")
+MESSAGES.ZGV_STEP_CHANGED("ZGV_STEP_CHANGED")
+RunTimers()
+check(Find("Step 2/2") ~= nil and not Labels():find("guides open"), "no open-guides line with one guide left")
+ZGV.Tabs.Pool, ZGV.Tabs.ActiveTab, ZGV.CurrentGuide = {}, nil, CURRENT
+
 -- Catch-up
 -- Duskwood (30-32) needs The Night Watch (57) from Duskwood (24-25) and Look To The Stars (177) from
 -- Westfall (25-26). Zygor's chains know the first, Questie the second. Quest 159 is for another class.
@@ -709,7 +750,15 @@ ZGV.completedQuests[57] = true
 questCallbacks[1](57, nil, 3)
 RunTimers()
 check(Find("Catching up: 1 earlier quest left") ~= nil, "turning in a needed quest counts down")
+-- Another open guide while catching up: the catch-up neither replaces it nor shows its line there.
+local catchupGuide = ZGV.CurrentGuide
+ZGV.CurrentGuide = NEXT2
 ZGV.completedQuests[177] = true
+questCallbacks[1](177, nil, 3)
+RunTimers()
+check(ZGV.CurrentGuide == NEXT2 and char.SISquests ~= nil and not Labels():find("Catching up"),
+    "a catch-up stays in its own tab while another guide is open")
+ZGV.CurrentGuide = catchupGuide
 questCallbacks[1](177, nil, 3)
 RunTimers()
 check(ZGV.CurrentGuide == DEST and ZGV.CurrentStepNum == 2 and char.SISquests == nil,

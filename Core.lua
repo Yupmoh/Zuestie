@@ -40,6 +40,7 @@ Z.DEFAULTS = {
     violetQuests = true, -- violet "!" for quests the guides pick up
     nextGuides = 3, -- next guides in Zygor's order whose quests count as guide quests
     catchUp = true, -- offer to catch up on earlier quests the guide needs
+    guideTabs = true, -- with several guides open, a line that switches between them
 }
 
 function Z.Setting(key)
@@ -211,6 +212,53 @@ function Z.SkipStep(fast)
     if Z.active and ZGV.CurrentGuide then
         ZGV:SkipStep(fast == true, false, true)
     end
+end
+
+-- Zygor keeps every open guide in a tab (ZGV.Tabs.Pool, in tab order); tabs without a guide are spare.
+-- Returns the open tabs and the index of the current guide's tab (nil when it has none).
+function Z.OpenTabs()
+    local tabs, current = {}, nil
+    local pool = ZGV.Tabs and ZGV.Tabs.Pool
+    if type(pool) ~= "table" then
+        return tabs, current
+    end
+    for _, tab in ipairs(pool) do
+        if type(tab.guide) == "table" and tab.guide.title and tab.ActivateGuide then
+            tabs[#tabs + 1] = tab
+            if tab.guide == ZGV.CurrentGuide and (not current or tab == ZGV.Tabs.ActiveTab) then
+                current = #tabs
+            end
+        end
+    end
+    return tabs, current
+end
+
+-- Switches to the next (delta 1) or previous (delta -1) open guide, at the step it was left on.
+function Z.SwitchGuide(delta)
+    local tabs, current = Z.OpenTabs()
+    if not Z.active or #tabs < 2 then
+        return
+    end
+    local i = current and ((current + delta - 1) % #tabs + 1) or (delta > 0 and 1 or #tabs)
+    tabs[i]:ActivateGuide("zuestie")
+    Z.RefreshSoon()
+end
+
+-- Closes the current guide's tab. Zygor then shows another open guide, or none.
+function Z.CloseGuide()
+    local tabs, current = Z.OpenTabs()
+    local tab = Z.active and current and tabs[current]
+    if not (tab and tab.RemoveTab) then
+        return
+    end
+    if Z.Catchup.Ready() and Z.Catchup.Active() and Z.Catchup.IsCatchupGuide(tab.guide) then
+        Z.Catchup.Cancel()
+        Z.Print("catch-up stopped.")
+    end
+    local name = tab.guide.title_short or tab.guide.title
+    tab:RemoveTab()
+    Z.Print("closed " .. name .. ".")
+    Z.RefreshSoon()
 end
 
 -- Same order as clicking Zygor's own progress bar; the mode is Zygor's setting.

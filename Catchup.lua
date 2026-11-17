@@ -449,6 +449,9 @@ function C.Line()
         return nil
     end
     if C.Active() then
+        if not C.IsCatchupGuide(ZGV.CurrentGuide) then
+            return nil -- another open guide; the catch-up goes on in its own tab
+        end
         local guide, step = Destination()
         local need = guide and C.Needed(guide, step)
         local dest = ShortTitle(ZGV.db.char.SISdestination[1])
@@ -542,6 +545,15 @@ local function Cancel()
     Z.Try(ZGV.QuestDB.Cancel, ZGV.QuestDB)
     C.Invalidate()
 end
+C.Cancel = Cancel
+
+-- With several guides open, a catch-up belongs to the tab showing one of its guides. Other open
+-- guides neither show its line nor get replaced by it.
+local function IsCatchupGuide(guide)
+    local guides = ZGV.db.char.SISguides
+    return type(guide) == "table" and type(guides) == "table" and guides[guide.title] ~= nil
+end
+C.IsCatchupGuide = IsCatchupGuide
 
 function C.Start()
     if not (Z.active and C.Ready()) then
@@ -636,6 +648,15 @@ end
 function C.Stop()
     if C.Ready() and C.Active() then
         local target, step = Destination()
+        if not IsCatchupGuide(ZGV.CurrentGuide) then
+            -- Stopped from another open guide: go back in the catch-up's own tab.
+            for _, tab in ipairs((Z.OpenTabs())) do
+                if IsCatchupGuide(tab.guide) then
+                    tab:ActivateGuide("zuestie")
+                    break
+                end
+            end
+        end
         Cancel()
         if target then
             ZGV:SetGuide(target.title, step)
@@ -680,7 +701,7 @@ function C.Update()
         return
     end
     local need = C.Needed(target, step)
-    if need and need.count == 0 then
+    if need and need.count == 0 and IsCatchupGuide(guide) then
         Cancel()
         Z.Print(("caught up. Back to %s, step %d."):format(ShortTitle(target.title), step))
         ZGV:SetGuide(target.title, step)

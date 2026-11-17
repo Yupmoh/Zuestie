@@ -165,6 +165,22 @@ local function AddNextGuide(m, guide)
     end
 end
 
+-- With more than one guide open in Zygor's tabs, a line that switches to the next one.
+local function AddOpenGuides(m)
+    if not Z.Setting("guideTabs") then
+        return
+    end
+    local tabs, current = Z.OpenTabs()
+    if #tabs < 2 then
+        return
+    end
+    local nextGuide = tabs[(current or 0) % #tabs + 1].guide
+    tinsert(m.lines, {
+        kind = "tabs",
+        text = ("%d guides open, next: %s"):format(#tabs, nextGuide.title_short or nextGuide.title),
+    })
+end
+
 function Z.BuildModel()
     local guide, step = ZGV.CurrentGuide, ZGV.CurrentStep
     local m = {lines = {}, pins = {}}
@@ -181,6 +197,7 @@ function Z.BuildModel()
     local short, levels = name:match("^(.-)%s*%((%d+%-%d+)%)$")
     m.guideName = short or name
     m.title = (levels and "(" .. levels .. ") " or "") .. ("Step %d/%d"):format(ZGV.CurrentStepNum or step.num or 0, #guide.steps)
+    Z.Try(AddOpenGuides, m)
     AddProgress(m)
     local ok, catchup = Z.Try(Z.Catchup.Line)
     if ok and catchup then

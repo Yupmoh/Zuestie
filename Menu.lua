@@ -36,13 +36,27 @@ local function LoadGuide(guide)
 end
 M.LoadGuide = LoadGuide
 
-local function GuideEntry(guide, text)
+-- A guide picked from the menu opens in its own Zygor tab, like Zygor's guide browser does; the guides
+-- open before stay open. The next-guide line continues in the same tab instead (LoadGuide).
+local function OpenGuide(guide)
+    if ZGV.Tabs and ZGV.Tabs.TryToActivateGuide and ZGV.Tabs:TryToActivateGuide(guide) then
+        return
+    end
+    if ZGV.Tabs and ZGV.Tabs.LoadGuideToTab then
+        ZGV.Tabs:LoadGuideToTab(guide.title, 1)
+    else
+        ZGV:SetGuide(guide.title, 1)
+    end
+end
+
+local function GuideEntry(guide, text, load)
     return {
         text = text or ShortTitle(guide.title),
         checked = guide == ZGV.CurrentGuide,
         func = function()
             Close()
-            LoadGuide(guide)
+            local open = load or OpenGuide
+            open(guide)
         end,
     }
 end
@@ -122,24 +136,24 @@ end
 
 local function OpenTabsMenu()
     local list = {}
-    local pool = ZGV.Tabs and ZGV.Tabs.Pool
-    if type(pool) ~= "table" then
-        return list
-    end
-    for _, tab in pairs(pool) do
+    for _, tab in ipairs((Z.OpenTabs())) do
         local guide = tab.guide
-        if type(guide) == "table" and guide.title and tab.ActivateGuide then
-            list[#list + 1] = {
-                text = ("%s (step %s)"):format(ShortTitle(guide.title), tostring(tab.step or "?")),
-                checked = guide == ZGV.CurrentGuide,
-                func = function()
-                    Close()
-                    tab:ActivateGuide("zuestie")
-                end,
-            }
-        end
+        list[#list + 1] = {
+            text = ("%s (step %s)"):format(ShortTitle(guide.title), tostring(tab.step or "?")),
+            checked = guide == ZGV.CurrentGuide,
+            func = function()
+                Close()
+                tab:ActivateGuide("zuestie")
+                Z.RefreshSoon()
+            end,
+        }
     end
     return list
+end
+
+local function CloseGuideEntry(guide)
+    return {text = "Close this guide: " .. ShortTitle(guide.title), notCheckable = true,
+        func = function() Close() Z.CloseGuide() end}
 end
 
 function M.Open()
@@ -152,10 +166,11 @@ function M.Open()
         list[#list + 1] = {text = "Skip step", notCheckable = true, func = function() Close() Z.SkipStep() end}
         local nextGuide = guide.next and ZGV:GetGuideByTitle(guide.next)
         if nextGuide then
-            local entry = GuideEntry(nextGuide, "Load next guide: " .. ShortTitle(nextGuide.title))
+            local entry = GuideEntry(nextGuide, "Load next guide: " .. ShortTitle(nextGuide.title), LoadGuide)
             entry.checked, entry.notCheckable = nil, true
             list[#list + 1] = entry
         end
+        list[#list + 1] = CloseGuideEntry(guide)
     end
 
     local suggested = SuggestedMenu()
@@ -173,8 +188,22 @@ function M.Open()
     end
     list[#list + 1] = {text = "Use Zygor's window instead", notCheckable = true, func = function() Close() Z.SetEnabled(false) end}
     list[#list + 1] = {text = "Settings", notCheckable = true, func = function() Close() Z.Options.Open() end}
-    list[#list + 1] = {text = "Close", notCheckable = true, func = Close}
+    list[#list + 1] = {text = "Close menu", notCheckable = true, func = Close}
 
+    LibDropDown:EasyMenu(list, menuFrame, "cursor", 0, 0, "MENU")
+end
+
+-- The open guides: pick one, or close the current one. Right-click on the tracker's open-guides line.
+function M.OpenTabs()
+    menuFrame = menuFrame or LibDropDown:Create_UIDropDownMenu("ZuestieMenuFrame", UIParent)
+    local list = {{text = "Open guides", isTitle = true, notCheckable = true}}
+    for _, entry in ipairs(Chunk(OpenTabsMenu())) do
+        list[#list + 1] = entry
+    end
+    if ZGV.CurrentGuide then
+        list[#list + 1] = CloseGuideEntry(ZGV.CurrentGuide)
+    end
+    list[#list + 1] = {text = "Close menu", notCheckable = true, func = Close}
     LibDropDown:EasyMenu(list, menuFrame, "cursor", 0, 0, "MENU")
 end
 
@@ -200,6 +229,6 @@ function M.OpenGuides()
     if ZGV.GuideMenu and ZGV.GuideMenu.Show then
         list[#list + 1] = {text = "Search guides (Zygor browser)", notCheckable = true, func = function() Close() ZGV.GuideMenu:Show() end}
     end
-    list[#list + 1] = {text = "Close", notCheckable = true, func = Close}
+    list[#list + 1] = {text = "Close menu", notCheckable = true, func = Close}
     LibDropDown:EasyMenu(list, menuFrame, "cursor", 0, 0, "MENU")
 end

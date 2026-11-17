@@ -99,6 +99,7 @@ local options = {
                 itemButtons = Toggle(4, "Item buttons", "A clickable item on steps that say to use an item. They update after combat ends."),
                 questListMarks = Toggle(5, "Mark guide quests in the quest list", "A violet \"!\" in front of quests your guides use."),
                 catchUp = Toggle(6, "Catch-up line", "When quests ahead in the guide need earlier quests you skipped, a violet line offers to do just those. Click it: Zygor loads the earlier guide, skips everything else, and brings you back to your step."),
+                guideTabs = Toggle(7, "Open guides line", "With more than one guide open, a line under the step switches to the next one. Right-click it to pick or close a guide. Guides picked from the menu open next to the ones you have."),
             },
         },
         map = {
