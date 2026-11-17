@@ -240,8 +240,12 @@ local BUTTONS = {
         hint = function()
             return ZGV.db.profile.arrowshow and "Right-click: hide the arrow" or "Right-click: show the arrow"
         end},
-    {key = "prev", tip = "Previous step", texture = "Interface\\Buttons\\UI-SpellbookIcon-PrevPage", paged = true, click = function() Z.PrevStep() end},
-    {key = "next", tip = "Next step (skip)", texture = "Interface\\Buttons\\UI-SpellbookIcon-NextPage", paged = true, click = function() Z.SkipStep() end},
+    {key = "prev", tip = "Previous step", texture = "Interface\\Buttons\\UI-SpellbookIcon-PrevPage", paged = true,
+        click = function(_, mouse) Z.PrevStep(mouse == "RightButton") end,
+        hint = function() return "Right-click: back to the last unfinished step" end},
+    {key = "next", tip = "Next step (skip)", texture = "Interface\\Buttons\\UI-SpellbookIcon-NextPage", paged = true,
+        click = function(_, mouse) Z.SkipStep(mouse == "RightButton") end,
+        hint = function() return "Right-click: skip ahead to the next unfinished step" end},
 }
 local SHOW_ORDER = {"guides", "next", "prev"} -- which buttons stay when the space is narrow
 local buttons = {}

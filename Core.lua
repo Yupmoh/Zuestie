@@ -199,15 +199,17 @@ function Z.RefreshSoon()
     C_Timer.After(REFRESH_DELAY, Z.Refresh)
 end
 
-function Z.PrevStep()
+-- fast: like right-clicking Zygor's own arrows, back to the last unfinished step.
+function Z.PrevStep(fast)
     if Z.active and ZGV.CurrentGuide then
-        ZGV:PreviousStep(false, true)
+        ZGV:PreviousStep(fast == true, true)
     end
 end
 
-function Z.SkipStep()
+-- fast: like right-clicking Zygor's own arrows, on to the next unfinished step.
+function Z.SkipStep(fast)
     if Z.active and ZGV.CurrentGuide then
-        ZGV:SkipStep(false, false, true)
+        ZGV:SkipStep(fast == true, false, true)
     end
 end
 

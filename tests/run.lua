@@ -387,8 +387,8 @@ end
 function ZGV.Professions:GetSkill(name) return self.known[name] or self.placeholder end
 function ZGV:SetGuide(title) LOADED = title end
 function ZGV:FocusStep() end
-function ZGV:SkipStep() end
-function ZGV:PreviousStep() end
+function ZGV:SkipStep(fast) SKIPPED = fast end
+function ZGV:PreviousStep(fast) BACKED = fast end
 function ZGV:GetStickiesAt() return {} end
 function ZGV:SetVisible(_, on) self.Frame:SetShown(on) end
 function ZGV:FindSuggestedGuides() return {} end
@@ -605,6 +605,18 @@ COMBAT = false
 check(p.arrowshow == false, "the arrow is not shown or hidden during combat")
 book.scripts.OnClick(book, "RightButton")
 check(p.arrowshow == true, "right-clicking again shows the arrow")
+
+-- Step arrows: right-click jumps over finished steps, like Zygor's own arrows
+local nextArrow, prevArrow
+for _, f in ipairs(FRAMES) do
+    if f.normal == "Interface\\Buttons\\UI-SpellbookIcon-NextPage-Up" then nextArrow = f end
+    if f.normal == "Interface\\Buttons\\UI-SpellbookIcon-PrevPage-Up" then prevArrow = f end
+end
+nextArrow.scripts.OnClick(nextArrow, "LeftButton")
+local leftSkip = SKIPPED
+nextArrow.scripts.OnClick(nextArrow, "RightButton")
+prevArrow.scripts.OnClick(prevArrow, "RightButton")
+check(leftSkip == false and SKIPPED == true and BACKED == true, "right-clicking the step arrows skips finished steps")
 
 -- End of guide
 ZGV.CurrentStep, ZGV.CurrentStepNum = LAST, 2
