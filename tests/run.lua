@@ -333,6 +333,7 @@ zframe.clamped = true
 zframe:SetPoint("TOPLEFT", master)
 
 local FOG = true
+TURNED_IN = {} -- [questId] = true: what the game says is turned in
 ZGV = {
     Frame = zframe,
     initialized = true,
@@ -344,6 +345,8 @@ ZGV = {
     CurrentStep = STEP1,
     CurrentStepNum = 1,
     questsbyid = {[245] = {inlog = true}},
+    -- Zygor asks the game about quests missing from the table (QuestTracking.lua).
+    completedQuests = setmetatable({}, {__index = function(_, id) return TURNED_IN[tonumber(id) or 0] or false end}),
     GOALTYPES = {},
     ProgressBar = {CurrentProgress = 34, Text = {tooltip = "Steps Completed: 1/2"}},
     Pointer = {
@@ -467,6 +470,19 @@ check(ZGV.Professions:GetSkill("Lockpicking").level == 14 and ZGV.Professions:Ge
 LOCKPICKING = 15
 check(ZGV.Professions:GetSkill("Lockpicking").level == 15, "Lockpicking follows skill-ups")
 check(ZGV.Professions:GetSkill("Cooking").level == 126, "keeps Zygor's own skill values")
+
+-- A quest the game takes away once another one is turned in
+QDATA[1282] = {name = "They Call Him Smiling Jim", availableUntilCompleted = 1302}
+QDATA[1301] = {name = "James Hyal", availableUntilCompleted = 1282}
+QDATA[1440] = {name = "Return to Vahlarriel", exclusiveTo = {1393}}
+check(ZGV.completedQuests[1282] == false, "a quest still on offer is not done")
+TURNED_IN[1302], TURNED_IN[1393] = true, true
+check(ZGV.completedQuests[1282] == true and ZGV.completedQuests[1440] == true,
+    "a quest the game no longer offers counts as done for Zygor")
+ZGV.questsbyid[1282] = {inlog = true}
+check(ZGV.completedQuests[1282] == false and ZGV.completedQuests[1301] == false,
+    "a quest in the log is not done, nor are quests it takes away")
+ZGV.questsbyid[1282] = nil
 
 -- Zygor's party sync with a member the client has not loaded yet ("Unknown", no surname)
 PARTY = {{"Nyx", "Duskfang"}, {"Unknown", nil}}

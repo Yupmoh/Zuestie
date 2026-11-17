@@ -126,7 +126,70 @@ local function RepairPartySync()
     end
 end
 
+-- Quests the game no longer offers -----------------------------------------------------------
+-- Some quests disappear once another one is turned in: They Call Him Smiling Jim (1282) is gone after
+-- James Hyal (1302), the other way into the same chain. Zygor does not know this, so its guide waits at
+-- Guard Byron for a quest he no longer has. Questie does (availableUntilCompleted, exclusiveTo). Every
+-- Zygor check of "is this quest done" goes through ZGV.completedQuests, so a quest Questie says can no
+-- longer be taken now counts as done there too: its accept and turn-in steps move on.
+local blockers = {} -- [questId] = quests whose turn-in takes this one away (false: none)
+
+local function Blockers(q)
+    local known = blockers[q]
+    if known ~= nil then
+        return known
+    end
+    if not Z.Catchup.QuestieReady() then
+        return false -- asked again once Questie has loaded
+    end
+    local field = Z.Catchup.QuestieField
+    local list = {}
+    local untilDone = field(q, "availableUntilCompleted")
+    if type(untilDone) == "number" and untilDone > 0 then
+        list[#list + 1] = untilDone
+    end
+    local exclusive = field(q, "exclusiveTo")
+    if type(exclusive) == "table" then
+        for _, other in ipairs(exclusive) do
+            list[#list + 1] = other
+        end
+    end
+    known = #list > 0 and list or false
+    blockers[q] = known
+    return known
+end
+
+local function RepairUnavailableQuests()
+    local quests = ZGV.completedQuests
+    local meta = type(quests) == "table" and getmetatable(quests)
+    local turnedIn = meta and meta.__index
+    if type(turnedIn) ~= "function" then
+        return
+    end
+    meta.__index = function(t, id)
+        if turnedIn(t, id) then
+            return true
+        end
+        local q = tonumber(id)
+        local list = q and Blockers(q)
+        if not list then
+            return false
+        end
+        local quest = ZGV.questsbyid and ZGV.questsbyid[q]
+        if quest and quest.inlog then
+            return false
+        end
+        for _, other in ipairs(list) do
+            if rawget(t, other) or turnedIn(t, other) then
+                return true
+            end
+        end
+        return false
+    end
+end
+
 function R.Install()
     Z.Try(RepairSkills)
     Z.Try(RepairPartySync)
+    Z.Try(RepairUnavailableQuests)
 end

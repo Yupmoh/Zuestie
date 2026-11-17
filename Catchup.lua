@@ -29,6 +29,7 @@ C.ShortTitle = ShortTitle
 local function QuestieReady()
     return type(Questie) == "table" and type(Questie.API) == "table" and Questie.API.isReady
 end
+C.QuestieReady = QuestieReady
 
 local function QuestieField(q, field)
     if not QuestieReady() then
@@ -43,6 +44,7 @@ local function QuestieField(q, field)
         return value
     end
 end
+C.QuestieField = QuestieField
 
 local function Done(q)
     if ZGV.completedQuests[q] then
