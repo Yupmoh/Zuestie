@@ -83,6 +83,7 @@ function Frame:GetAttribute(k) return self.attributes[k] end
 function CreateFrame(kind, name, parent, template) return NewFrame(kind, name, parent, template) end
 UIParent = NewFrame("Frame", "UIParent")
 WorldMapFrame = NewFrame("Frame", "WorldMapFrame")
+function WorldMapFrame:SetMapID(id) self.mapID = id end
 
 GameTooltip = {lines = {}}
 function GameTooltip:SetOwner(owner) self.owner = owner self.lines = {} end
@@ -276,6 +277,7 @@ local Goal = {}
 Goal.__index = Goal
 function Goal:GetStatus() return self.status end
 function Goal:GetText() return self.text end
+function Goal:IsVisible() return true end
 function Goal:IsInlineTravel() return self.travel or false end
 function Goal:CanBeIndentHidden() return false end
 function Goal:OnClick() CLICKED = self end
@@ -285,7 +287,18 @@ local Step = {}
 Step.__index = Step
 function Step:IsComplete() return false end
 function Step:AreRequirementsMet() return not self.otherClass end
-local function S(goals) return setmetatable({goals = goals}, Step) end
+function Step:IsCurrentlySticky() return false end
+function Step:CycleWaypointTo(num)
+    local goal = self.goals[num]
+    ZGV.Pointer.DestinationWaypoint = {m = goal.map, x = goal.x, y = goal.y}
+end
+local function S(goals)
+    local step = setmetatable({goals = goals}, Step)
+    for i, goal in ipairs(goals) do
+        goal.parentStep, goal.num = step, i
+    end
+    return step
+end
 local Guide = {}
 Guide.__index = Guide
 function Guide:GetStatus() return self.status or "VALID" end
@@ -336,6 +349,9 @@ ZGV = {
     Pointer = {
         ArrowSkins = {Starlight = {name = "Starlight"}, Stealth = {name = "Stealth"}},
         ClearSet = function() end,
+        ClearWaypoints = function() end,
+        SetWaypoint = function(_, m, x, y) return {m = m, x = x, y = y} end,
+        FindTravelPath = function(self, way) self.DestinationWaypoint = way end,
         ShowMapMarkers = function() end,
         SetArrowSkin = function(_, id) ZGV.db.profile.arrowskin = id end,
         SetupArrow = function() ARROW_SETUP = (ARROW_SETUP or 0) + 1 end,
@@ -500,6 +516,26 @@ check(CLICKED == KILL, "clicking a line forwards to Zygor")
 local killLine = Find("Kill 7")
 M("QuestieTracker"):Update()
 check(killLine.zuestie == nil and killLine.scripts.OnClick == "questieHandler", "pooled line handed back to Questie")
+
+-- A step naming more than one place for the same thing (|mapmarker): each click moves the arrow on.
+local DOCS = G{action = "click", status = "incomplete", text = "Click Syndicate Documents"}
+ZGV.CurrentStep = S{DOCS,
+    G{action = "accept", status = "incomplete", text = "Accept 'Foreboding Plans'", x = 0.4791, y = 0.8213, map = 1416},
+    G{action = "mapmarker", status = "hidden", text = "", x = 0.5832, y = 0.6792, map = 1416}}
+MESSAGES.ZGV_STEP_CHANGED("ZGV_STEP_CHANGED")
+RunTimers()
+local docs = Find("Click Syndicate Documents")
+local function ArrowX() return ZGV.Pointer.DestinationWaypoint and ZGV.Pointer.DestinationWaypoint.x end
+CLICKED = nil
+docs.scripts.OnClick(docs, "LeftButton")
+check(ArrowX() == 0.4791 and WorldMapFrame.mapID == 1416, "first click on a multi-place step points at its first place")
+docs.scripts.OnClick(docs, "LeftButton")
+check(ArrowX() == 0.5832, "next click points at the marker place")
+docs.scripts.OnClick(docs, "LeftButton")
+check(ArrowX() == 0.4791 and CLICKED == nil, "then back to the first place")
+ZGV.CurrentStep, ZGV.Pointer.DestinationWaypoint = STEP1, nil
+MESSAGES.ZGV_STEP_CHANGED("ZGV_STEP_CHANGED")
+RunTimers()
 
 -- Map colors
 check(ICON66.texture.texturePath == VIOLET, "guide quest from an earlier step is violet")

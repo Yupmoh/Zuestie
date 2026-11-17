@@ -93,6 +93,84 @@ local function Format(line)
     return indent .. "|cFFFFFFFF" .. line.text:gsub(ZYGOR_QUEST_COLOR, QUEST_COLOR) .. "|r"
 end
 
+-- Steps with |mapmarker lines name more than one place for the same thing ("Multiple locations").
+-- Zygor's arrow only points at the step's goal places, so on such a step a left click on any of
+-- its lines moves the arrow to the next place: goal places in step order, then the marker places,
+-- then around again. Other steps keep Zygor's own goal click.
+local function IsPlace(place, map, x, y)
+    return place.map == map and math.abs(place.x - x) < 0.0005 and math.abs(place.y - y) < 0.0005
+end
+
+local function StepPlaces(step)
+    local places, markers = {}, false
+    for _, goal in ipairs(step.goals or {}) do
+        local place
+        if goal.x and goal.y and goal.map then
+            if goal.action == "mapmarker" then
+                if not goal.condition_visible or goal.condition_visible() then
+                    place, markers = {map = goal.map, x = goal.x, y = goal.y}, true
+                end
+            elseif not goal.force_noway and goal:IsVisible() and goal:GetStatus() ~= "complete" then
+                place = {map = goal.map, x = goal.x, y = goal.y, goal = goal}
+            end
+        end
+        for _, other in ipairs(place and places or {}) do
+            if IsPlace(other, place.map, place.x, place.y) then
+                place = nil
+                break
+            end
+        end
+        places[#places + 1] = place
+    end
+    return markers and #places > 1 and places or nil
+end
+
+-- The place after the arrow's current one; when the arrow points elsewhere, the clicked goal's own.
+local function NextPlace(places, clicked)
+    local dest = ZGV.Pointer.DestinationWaypoint
+    if dest and dest.x and dest.y then
+        for i, place in ipairs(places) do
+            if IsPlace(place, dest.m, dest.x, dest.y) then
+                return places[i % #places + 1]
+            end
+        end
+    end
+    for _, place in ipairs(places) do
+        if place.goal == clicked then
+            return place
+        end
+    end
+    return places[1]
+end
+
+local function PointAt(step, place)
+    local pointer = ZGV.Pointer
+    pointer:ClearWaypoints("manual")
+    if WorldMapFrame:IsShown() then
+        WorldMapFrame:SetMapID(place.map)
+    end
+    if place.goal and not step:IsCurrentlySticky() then
+        -- What Zygor's own goal click does: the arrow belongs to the goal and moves on once it is done.
+        step:CycleWaypointTo(place.goal.num)
+        ZGV:ShowWaypoints()
+    else
+        -- What Zygor does for a map marker click.
+        pointer:FindTravelPath(pointer:SetWaypoint(place.map, place.x, place.y, {}, false))
+    end
+end
+
+local function ClickGoal(goal, button)
+    local step = goal.parentStep
+    local kind = ZGV.GOALTYPES[goal.action]
+    local places = step and button == "LeftButton" and not goal.next
+        and not (kind and (kind.click_to_complete or kind.onclick)) and StepPlaces(step)
+    if places then
+        PointAt(step, NextPlace(places, goal))
+    else
+        goal:OnClick(button)
+    end
+end
+
 local function OnLineClick(self, button)
     local data = self.zuestie
     if not data then
@@ -122,7 +200,7 @@ local function OnLineClick(self, button)
         Z.Menu.Open()
         return
     end
-    Z.Try(data.goal.OnClick, data.goal, button)
+    Z.Try(ClickGoal, data.goal, button)
     Z.RefreshSoon()
 end
 
