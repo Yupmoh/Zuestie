@@ -55,6 +55,23 @@ local function EnsureShown()
     end
 end
 
+-- Zygor's end-of-guide rating panels sit inside its window but are clamped to the screen
+-- (ZGV.UI:Create("Frame"), UiWidgets/Frame.lua), so the parked window would leave them in the
+-- bottom-left corner as an empty box. They are made on demand by these GuideRating methods.
+local RATING_CREATORS = {"CreateFrame", "CreateAltFrame", "CreateCancelledFrame", "Popup"}
+
+local function SetRatingClamped(clamped)
+    local rating = ZGV.BugReport and ZGV.BugReport.GuideRating
+    if not rating then
+        return
+    end
+    local cancelled = rating.CancelledRatingFrame
+    for _, frame in pairs({rating.GuideRatingViewer, rating.NoRatingFrame, rating.ZygorPopupOn, cancelled,
+        cancelled and cancelled.centeranchor}) do
+        frame:SetClampedToScreen(clamped)
+    end
+end
+
 local function InstallHooks()
     if hooked then
         return
@@ -78,6 +95,18 @@ local function InstallHooks()
             pointer:ClearSet("stepmarkers")
         end
     end)
+    local rating = ZGV.BugReport and ZGV.BugReport.GuideRating
+    if rating then
+        for _, name in ipairs(RATING_CREATORS) do
+            if rating[name] then
+                hooksecurefunc(rating, name, function()
+                    if Z.active then
+                        SetRatingClamped(false)
+                    end
+                end)
+            end
+        end
+    end
 end
 
 -- Makes Zygor's visible pieces match its current profile values.
@@ -141,6 +170,7 @@ function H.Enable()
     end
     InstallHooks()
     Park()
+    SetRatingClamped(false)
     EnsureShown()
     if ZGV.Frame:GetAlpha() < 0.1 then
         ZGV.Frame:SetAlpha(1)
@@ -165,6 +195,7 @@ function H.Disable()
     H.RestoreProfile()
     local f = ZGV.Frame
     f:SetClampedToScreen(true)
+    SetRatingClamped(true)
     if not Z.Try(ZGV.ReanchorFrame, ZGV) then
         f:ClearAllPoints()
         f:SetPoint("TOPLEFT", f:GetParent())

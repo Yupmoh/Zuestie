@@ -347,6 +347,7 @@ ZGV = {
     IsDataProviderRegistered = function() return FOG end,
     NotificationCenter = {UpdateButton = function() end},
     Tabs = {Pool = {}, TryToActivateGuide = function() return false end},
+    BugReport = {GuideRating = {}},
     Professions = {tradeskillsIdByName = {Cooking = 185, Riding = 762},
         known = {Cooking = {level = 126, max = 150, skillID = 185, name = "Cooking"}},
         placeholder = {active = false, level = 0, max = 0, placeholder = true}},
@@ -359,6 +360,11 @@ ZGV = {
     },
 }
 ZGV.Events_Events = {GROUP_ROSTER_UPDATE = {ZGV.Sync.OnEvent}}
+-- Zygor makes its end-of-guide panel inside its window, clamped to the screen like every ZGV.UI frame.
+function ZGV.BugReport.GuideRating:CreateAltFrame()
+    self.NoRatingFrame = NewFrame("Frame", nil, zframe)
+    self.NoRatingFrame.clamped = true
+end
 function ZGV.Professions:GetSkill(name) return self.known[name] or self.placeholder end
 function ZGV:SetGuide(title) LOADED = title end
 function ZGV:FocusStep() end
@@ -557,6 +563,9 @@ check(nextLine ~= nil, "last step shows a next-guide line")
 check(not item.shown and item.parent == UIParent, "item button leaves with its step")
 nextLine.scripts.OnClick(nextLine, "LeftButton")
 check(LOADED == NEXT1.title, "clicking the next-guide line loads it")
+local rating = ZGV.BugReport.GuideRating
+rating:CreateAltFrame()
+check(not rating.NoRatingFrame.clamped, "Zygor's end-of-guide panel stays off-screen with its window")
 
 -- Catch-up
 -- Duskwood (30-32) needs The Night Watch (57) from Duskwood (24-25) and Look To The Stars (177) from
@@ -641,6 +650,7 @@ check(p.enable_actionbar == true and p.mapicons == true and p.foglight == true a
 check(p.beta_use_chains == nil, "turns Zygor's quest-chain checks back off")
 point, relativeTo = zframe:GetPoint(1)
 check(point == "TOPLEFT" and relativeTo == master and zframe.clamped, "puts Zygor's window back")
+check(rating.NoRatingFrame.clamped, "puts Zygor's end-of-guide panel back")
 check(#PINS == 0, "removes the step pins")
 check(not Labels():find("Duskwood"), "Questie's tracker back to stock")
 check(ICON66.texture.texturePath == "yellow", "quest colors back to Questie's")
