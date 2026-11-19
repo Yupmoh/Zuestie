@@ -194,6 +194,28 @@ local options = {
                 },
             },
         },
+        party = {
+            order = 35,
+            type = "group",
+            inline = true,
+            name = "Party (Zygor's settings)",
+            disabled = function() return not ZygorReady() end,
+            args = {
+                sync_snap = {
+                    order = 1,
+                    type = "toggle",
+                    width = "full",
+                    name = "Wait for party members",
+                    desc = "In a group, Zygor holds each step until party members on the same guide have finished it too. Turn this off to move on without them. Every player sets this for themselves.",
+                    get = function() return ZygorReady() and ZGV.db.profile.sync_snap end,
+                    set = function(_, value)
+                        if ZygorReady() then
+                            ZGV.db.profile.sync_snap = value
+                        end
+                    end,
+                },
+            },
+        },
         zygor = {
             order = 40,
             type = "execute",
