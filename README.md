@@ -41,7 +41,7 @@ While Zuestie is on, Zygor also skips accept steps whose earlier quests you have
 
 ## Settings
 
-Esc, then Options, then AddOns, then Zuestie (or type `/zu config`). Switch the progress bar, tips, step-line buttons, item buttons, quest-list marks, catch-up line, map pins and violet "!" on or off, choose how many next guides count, and change Zygor's arrow style and size.
+Esc, then Options, then AddOns, then Zuestie (or type `/zu config`). Switch the progress bar, tips, step-line buttons, item buttons, quest-list marks, catch-up line, map pins and violet "!" on or off, choose how many next guides count, change Zygor's path lines and arrow style and size, and stop Zygor from waiting for party members before it moves to the next step.
 
 ## Commands
 
