@@ -8,6 +8,9 @@
 ## SavedVariables: ZuestieDB
 ## IconTexture: Interface\AddOns\Questie\Icons\questie.png
 
+Libs\LibStub\LibStub.lua
+Libs\LibUIDropDownMenuQuestie-4.0\LibUIDropDownMenu.xml
+
 Core.lua
 Model.lua
 Catchup.lua
