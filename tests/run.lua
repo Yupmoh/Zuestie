@@ -413,7 +413,9 @@ local files = ZUESTIE_FILES
 if not files then
     files = {}
     for line in io.lines(ROOT .. "Zuestie.toc") do
-        if line:match("%.lua%s*$") then files[#files + 1] = line:match("^%s*(.-)%s*$") end
+        -- Bundled libraries (Libs\) keep their own mocks; the suite tests Zuestie's code only.
+        local entry = line:match("^%s*(.-)%s*$")
+        if entry:match("%.lua%s*$") and not entry:match("^Libs\\") then files[#files + 1] = entry end
     end
 end
 local compile = loadstring or load
